@@ -202,11 +202,20 @@ ask_to_install_astpp ()
 			ask_to_user_yes_or_no "Do you want to install ASTPP web interface?"
 			if [ ${TEMP_USER_ANSWER} = "yes" ]; then
 				INSTALL_ASTPP_WEB_INTERFACE="yes"
+				ask_to_user_yes_or_no "Do you want to add locales to OS for translations in ASTPP?"
+				if [ "${TEMP_USER_ANSWER}" = "yes" ]; then
+					INSTALL_LOCALES="yes" 
+				fi
 			fi	 
 		fi
 		echo "Installation Done"
 }
 ask_to_install_astpp
+
+
+
+
+
 
 
 #################################
@@ -660,6 +669,34 @@ action   = %(banaction)s[name=%(__name__)s-tcp, port="%(port)s", protocol="tcp",
 		fi   
 }
 
+#-- Install OS locales for languages in ASTPP web GUI, currently only implemented for Debian
+function install_locales_for_astpp () { 
+	if [ ${INSTALL_ASTPP_WEB_INTERFACE} == "yes" ] ; then 
+		if [ "$DIST" == "DEBIAN" ]; then
+			regen_locales=false
+			for D in ${WWWDIR}/astpp/application/modules/user/language/*; do
+				if [ -d "${D}" ]; then
+					locale=${D##*/}
+					grep -q "^$locale.UTF-8 UTF-8" /etc/locale.gen 
+					if [$? -ne 0 ] ; then 
+						regen_locales=true
+						echo "Attempting to add locale $locale"
+						echo "$locale.UTF-8 UTF-8" >> /etc/locale.gen
+					fi
+				fi
+			done
+			if [ ${regen_locales} == "true" ] ; then
+				echo "Generating all required locales - please be patient"
+				locale-gen
+				service nginx restart
+				echo "If translations in ASTPP don't work, please reboot and they should"
+			fi
+		else 
+			echo "You will need to manually set up additional locales on this operating system"
+		fi
+	fi
+}
+
 astpp_install () 
 {
 		if [ ${ASTPP_USING_FREESWITCH} = "yes" ]; then
@@ -674,6 +711,9 @@ astpp_install ()
 		setup_cron
 		startup_services	
 		install_fail2ban		
+		if [ ${INSTALL_LOCALES} == "yes" ] ; then 
+			install_locales_for_astpp
+		fi
 		clear
 		echo "******************************************************************************************"
 		echo "******************************************************************************************"
