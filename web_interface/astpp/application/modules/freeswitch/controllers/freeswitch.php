@@ -602,7 +602,7 @@ class Freeswitch extends MX_Controller {
 					$insert_arr [$key] = $gateway_data ["status"];
 				} else {
 					if ($key != "id") {
-						$gateway_arr [$key] = $gateway_value;
+						$gateway_arr [$key] = trim($gateway_value);
 					}
 				}
 			}
@@ -811,9 +811,9 @@ class Freeswitch extends MX_Controller {
 		if ($button_name == "start") {
 			$cmd = "api sofia profile " . trim ( $query [0] ['name'] ) . " start";
 		} elseif ($button_name == "stop") {
-			$cmd = "api sofia profile stop";
+			$cmd = "api sofia profile " . trim ( $query [0] ['name'] ) . " stop";
 		} elseif ($button_name == "reload") {
-			$cmd = "api reloadxml";
+			$cmd = "api reload mod_sofia";
 		} elseif ($button_name == "rescan") {
 			$cmd = "api sofia profile " . trim ( $query [0] ['name'] ) . " rescan";
 		}
@@ -868,6 +868,8 @@ class Freeswitch extends MX_Controller {
 				redirect ( base_url () . 'freeswitch/fssipprofile_add/' );
 			}
 			$this->session->set_flashdata ( 'astpp_errormsg', 'SIP Profile Added Successfully!' );
+                        $cmd = "api reload mod_sofia";
+                        $this->freeswitch_model->reload_freeswitch ( $cmd );
 			redirect ( base_url () . 'freeswitch/fssipprofile/' );
 		}
 		
@@ -1013,6 +1015,8 @@ class Freeswitch extends MX_Controller {
 				"id" => $profile_id 
 		) );
 		$this->session->set_flashdata ( 'astpp_notification', 'SIP Profile Removed Successfully!' );
+		$cmd = "api reload mod_sofia";
+		$this->freeswitch_model->reload_freeswitch ( $cmd );
 		redirect ( base_url () . 'freeswitch/fssipprofile/' );
 	}
 	function fsserver_list() {
