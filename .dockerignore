@@ -1,0 +1,11 @@
+.git
+.gitignore
+vendor
+node_modules
+*.log
+doc/
+web_interface/
+database/archive/
+freeswitch/mod/
+freeswitch/conf/
+freeswitch/scripts/
