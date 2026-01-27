@@ -1,0 +1,17 @@
+{
+    "name": "astpp/astpp",
+    "description": "ASTPP - Open Source VoIP Billing Solution",
+    "require-dev": {
+        "phpunit/phpunit": "^9.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "ASTPP\\Tests\\": "tests/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ASTPP\\Tests\\": "tests/"
+        }
+    }
+}
