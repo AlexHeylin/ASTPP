@@ -29,6 +29,7 @@ class Invoices extends MX_Controller {
 		$this->load->library ( 'session' );
 		$this->load->library ( 'invoices_form' );
 		$this->load->library ( 'astpp/form' );
+		$this->load->library ( 'astpp/permission' );
 		$this->load->model ( 'invoices_model' );
 		$this->load->model ( 'Astpp_common' );
 		$this->load->model ( 'common_model' );
@@ -73,7 +74,7 @@ class Invoices extends MX_Controller {
 		}
 		$grid_fields = json_decode ( $this->invoices_form->build_invoices_list_for_admin () );
 		$url = ($logintype == 0 || $logintype == 3) ? "/user/user_invoice_download/" : '/invoices/invoice_download/';
-		if ($result_query->num_rows > 0) {
+		if ($result_query->num_rows () > 0) {
 			$query = $result_query->result_array ();
 			$total_value = 0;
 			$ountstanding_value = 0;
@@ -83,12 +84,7 @@ class Invoices extends MX_Controller {
 				$invoice_date = date ( "Y-m-d", $date );
 				$fromdate = strtotime ( $value ['from_date'] );
 				$from_date = date ( "Y-m-d", $fromdate );
-				$duedate = strtotime ( $value ['due_date'] );
-				if ($value ['type'] == 'I') {
-					$due_date = date ( "Y-m-d", $duedate );
-				} else {
-					$due_date = '';
-				}
+				$due_date = date("Y-m-d",strtotime ( $value ['due_date'] ));				
 				$outstanding = $value ['amount'];
 				$last_payment_date = '';
 				$invoice_total_query = $this->db_model->select ( "sum(debit) as debit,sum(credit) as credit,created_date", "invoice_details", array (
@@ -110,10 +106,10 @@ class Invoices extends MX_Controller {
 							$payment_date = strtotime ( $last_payment_date );
 							$payment_last = date ( "Y-m-d", $payment_date );
 						} else {
-							$payment_last = '';
+						    $payment_last = ($value ['amount']>0)?'':$invoice_date;
 						}
 					} else {
-						$payment_last = '';
+						$payment_last = $invoice_date;
 					}
 				}
 				
@@ -179,12 +175,7 @@ class Invoices extends MX_Controller {
 					$payment = '<button style="padding: 0 17px;" type="button"  class="btn btn-line-sky">Deleted</button>';
 					$delete_button = '';
 				}
-				
-				if ($value ['deleted'] == 1) {
-					$download = '';
-					$payment = '<button style="padding: 0 17px;" type="button"  class="btn btn-line-sky">Deleted</button>';
-					$delete_button = '';
-				}
+
 				if ($value ['type'] == 'R') {
 					$icon = '<div class="flx_font flx_magenta">R</div>';
 				} else {
@@ -551,7 +542,7 @@ class Invoices extends MX_Controller {
 			$invoice_details = $this->db_model->getSelect ( "*", "invoice_details", array (
 					"invoiceid" => $response_arr ["invoiceid"] 
 			) );
-			if ($invoice_details->num_rows > 0) {
+			if ($invoice_details->num_rows () > 0) {
 				$invoice_details_res = $invoice_details->result_array ();
 				$after_bal = 0;
 				foreach ( $invoice_details_res as $details_key => $details_value ) {
@@ -616,8 +607,8 @@ class Invoices extends MX_Controller {
 				$act_status = 1;
 			}
 			$balance_data = array (
-					'balance' => $bal_data,
-					'status' => $act_status 
+					'balance' => $bal_data
+					//,'status' => $act_status 
 			);
 			$this->db->update ( "accounts", $balance_data );
 			/**
@@ -659,15 +650,16 @@ class Invoices extends MX_Controller {
 		$account_balance = $this->common->get_field_name ( 'balance', 'accounts', $response_arr ['accountid'] );
 		if ($response_arr ['taxes_count'] > 0) {
 			for($a = 0; $a < $response_arr ['row_count']; $a ++) {
-				$arr_update = array (
-						'item_type' => 'TAX',
-						'id' => $response_arr ['description_total_tax_id_' . $a] 
-				);
-				$this->db->where ( $arr_update );
+				
 				$update_arr = array (
 						'debit' => $this->common_model->add_calculate_currency ( $response_arr ['abc_total_tax_input_' . $a], "", "", true, false ) 
 				);
 				$final_tax_bal += $this->common_model->add_calculate_currency ( $response_arr ['abc_total_tax_input_' . $a], "", "", true, false );
+				$arr_update = array (
+				    'item_type' => 'TAX',
+				    'id' => $response_arr ['description_total_tax_id_' . $a]
+				);
+				$this->db->where ( $arr_update );
 				$this->db->update ( "invoice_details", $update_arr );
 			}
 		}
@@ -701,7 +693,7 @@ class Invoices extends MX_Controller {
 			$invoice_details = $this->db_model->getSelect ( "*", "invoice_details", array (
 					"invoiceid" => $response_arr ["invoiceid"] 
 			) );
-			if ($invoice_details->num_rows > 0) {
+			if ($invoice_details->num_rows () > 0) {
 				$invoice_details_res = $invoice_details->result_array ();
 				$after_bal = 0;
 				foreach ( $invoice_details_res as $details_key => $details_value ) {
@@ -775,7 +767,7 @@ class Invoices extends MX_Controller {
 			);
 		}
 		$query = $this->db_model->getSelect ( "*", "invoice_conf", $where );
-		if ($query->num_rows > 0) {
+		if ($query->num_rows () > 0) {
 			$invoice_conf = $query->result_array ();
 			$invoice_conf = $invoice_conf [0];
 		} else {
@@ -894,6 +886,14 @@ class Invoices extends MX_Controller {
 	}
 	function invoice_list_responce() {
 		$response_arr = $_POST;
+
+		/*$fp = fopen ( "/tmp/astpp_payment.log", "a+" );
+		$date = date ( "Y-m-d H:i:s" );
+		fwrite ( $fp, "====================" . $date . "===============================\n" );
+		foreach ( $response_arr as $key => $value ) {
+			fwrite ( $fp, $key . ":::>" . $value . "\n" );
+		}*/
+
 		$logintype = $this->session->userdata ( 'logintype' );
 		if (($response_arr ["payment_status"] == "Pending" || $response_arr ["payment_status"] == "Complete" || $response_arr ["payment_status"] == "Completed")) {
 			$invoice_id = $response_arr ['item_number'];
@@ -1064,18 +1064,17 @@ class Invoices extends MX_Controller {
 			) );
 			// echo '<pre>'; print_r($reseller_debit); exit;
 			if ($reseller_debit > 0) {
-				$this->accounts_model->update_balance ( $amount, $response_arr ["custom"], "debit" );
-				$this->accounts_model->update_balance ( $amount, $reseller_debit, "debit" );
+				$this->accounts_model->update_balance ( $amount*-1, $response_arr ["custom"], "debit" );
+				$this->accounts_model->update_balance ( $amount*-1, $reseller_debit, "debit" );
 			} else {
-				$this->accounts_model->update_balance ( $amount, $response_arr ["custom"], "debit" );
+				$this->accounts_model->update_balance ( $amount*-1, $response_arr ["custom"], "debit" );
 			}
 			$account_data ['accountid'] = $account_data ['id'];
-			$this->email_lib->send_email ( 'email_payment_notification', $account_data, '', '', 0, 0, 0 );
-			if ($logintype = '1') {
-				$this->session->set_flashdata ( 'astpp_errormsg', 'Invoice payment done successfully!' );
+			//$this->email_lib->send_email ( 'email_payment_notification', $account_data, '', '', 0, 0, 0 );
+			$this->session->set_flashdata ( 'astpp_errormsg', 'Invoice payment done successfully!' );
+			if ($logintype = '1') {				
 				redirect ( base_url () . 'invoices/invoice_list/' );
-			} else {
-				$this->session->set_flashdata ( 'astpp_errormsg', 'Invoice payment done successfully!' );
+			} else {				
 				redirect ( base_url () . 'user/user_invoices_list/' );
 			}
 		}
@@ -1313,7 +1312,7 @@ class Invoices extends MX_Controller {
 		// $json_data['rows'] = $this->form->build_grid($Invoice_grid_data,$grid_fields);
 		$logintype = $this->session->userdata ( 'logintype' );
 		$url = ($logintype == 0 || $logintype == 3) ? "/user/user_invoice_download/" : '/invoices/invoice_download/';
-		if ($Invoice_grid_data->num_rows > 0) {
+		if ($Invoice_grid_data->num_rows () > 0) {
 			$query = $Invoice_grid_data->result_array ();
 			$total_value = 0;
 			$ountstanding_value = 0;
@@ -1369,6 +1368,7 @@ class Invoices extends MX_Controller {
 				$download = "<a href=" . $url . $value ['id'] . " class='btn btn-royelblue btn-sm'  title='Download Invoice' ><i class='fa fa-cloud-download fa-fw'></i></a>&nbsp";
 				if ($value ['type'] == 'R') {
 					$payment = '';
+					$payment_last = $invoice_date;
 					$outstanding = 0;
 				} else {
 					if ($outstanding > 0) {
@@ -1584,17 +1584,17 @@ class Invoices extends MX_Controller {
 		$this->load->view ( 'view_account_invoice_detail', $data );
 	}
 	function invoice_download($invoiceid) {
+		$this->permission->check_web_record_permission($invoiceid,'invoices',"invoices/invoice_list/");
 		$this->db->where ( 'id', $invoiceid );
-		$this->db->select ( 'type' );
+		$this->db->select ( 'type,accountid' );
 		$this->db->from ( 'invoices' );
 		$result = $this->db->get ();
 		if ($result->num_rows () > 0) {
-			$result = $result->result_array ();
-			$type = $result [0] ['type'];
-			if ($type == 'I') {
+			$result = (array)$result->first_row ();
+			if ($result['type'] == 'I') {
 				$this->invoice_main_download ( $invoiceid );
 			}
-			if ($type == 'R') {
+			if ($result['type'] == 'R') {
 				$this->receipt_download ( $invoiceid );
 			}
 		} else {
@@ -1647,7 +1647,7 @@ class Invoices extends MX_Controller {
 							);
 						}
 						$query = $this->db_model->getSelect ( "*", "invoice_conf", $where );
-						if ($query->num_rows > 0) {
+						if ($query->num_rows () > 0) {
 							$invoice_conf = $query->result_array ();
 							$invoice_conf = $invoice_conf [0];
 						} else {
@@ -1728,7 +1728,7 @@ class Invoices extends MX_Controller {
 			);
 			$query = $this->db_model->select ( $select, "invoices", $where, "id", "DESC", "1", "0" );
 		}
-		if ($query->num_rows > 0) {
+		if ($query->num_rows () > 0) {
 			$invoiceid = $query->result_array ();
 			$invoice_date = $invoiceid [0] [$select];
 			return $invoice_date;
@@ -1762,13 +1762,13 @@ class Invoices extends MX_Controller {
 			if ($debit) {
 				// echo 'debit'; exit;
 				$invoice_path = $this->config->item ( 'invoices_path' );
-				$download_path = $invoice_path . $accountdata ["id"] . '/' . $invoicedata ['invoice_prefix'] . $invoicedata ['invoiceid'] . "_invoice.pdf";
+				$download_path = $invoice_path . $accountdata ["id"] . '/' . $invoicedata ['invoice_prefix'] . $invoicedata ['invoiceid'] . ".pdf";
 				unlink ( $download_path );
 				$res = $this->common->get_invoice_template ( $invoicedata, $accountdata, "TRUE" );
 			}
 		}
 		$invoice_path = $this->config->item ( 'invoices_path' );
-		$download_path = $invoice_path . $accountdata ["id"] . '/' . $invoicedata ['invoice_prefix'] . $invoicedata ['invoiceid'] . "_invoice.pdf";
+		$download_path = $invoice_path . $accountdata ["id"] . '/' . $invoicedata ['invoice_prefix'] . $invoicedata ['invoiceid'] . ".pdf";
 		$res = $this->common->get_invoice_template ( $invoicedata, $accountdata, "TRUE" );
 	}
 	function Sec2Minutes($seconds) {
@@ -1804,16 +1804,14 @@ class Invoices extends MX_Controller {
 		$invoicedata = $this->db_model->getSelect ( "*", "invoices", array (
 				"id" => $invoiceid 
 		) );
-		$invoicedata = $invoicedata->result_array ();
-		$invoicedata = $invoicedata [0];
+		$invoicedata = (array)$invoicedata->first_row();
 		
-		$data ['invoiceid'] = @$invoicedata [0] ['id'];
-		$data ['id'] = @$invoicedata ['invoiceid'];
-		
-		$data ['invoice_date'] = @$invoicedata [0] ['invoice_date'];
-		$data ['accountid'] = @$invoicedata [0] ['accountid'];
-		$data ['from_date'] = @$invoicedata [0] ['from_date'];
-		$data ['to_date'] = @$invoicedata [0] ['to_date'];
+		$data ['invoiceid'] = $invoicedata['id'];
+		$data ['id'] = $invoicedata ['invoiceid'];
+		$data ['invoice_date'] = $invoicedata['invoice_date'];
+		$data ['accountid'] = $invoicedata['accountid'];
+		$data ['from_date'] = $invoicedata['from_date'];
+		$data ['to_date'] = $invoicedata['to_date'];
 		$total_list = array ();
 		$data ['description'] = '';
 		$data ['item_type'] = '';
@@ -1892,60 +1890,26 @@ class Invoices extends MX_Controller {
 		/**
 		 * ************************* Company Address Code START **************************************************
 		 */
-		
-		$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data ['invoiceconf'] ['company_name'] . '</td>';
+		$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data['invoiceconf']['company_name'] . '</td>';
 		$ACCOUNTADD .= '</tr>';
-		if ($data ['invoiceconf'] != "") {
-			
-			$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data ['invoiceconf'] ['address'] . '</td></tr>';
-		}
-		if ($data ['invoiceconf'] ['city'] != "") {
-			
-			$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data ['invoiceconf'] ['city'] . '</td></tr>';
-		}
-		if ($data ['invoiceconf'] ['province'] != "") {
-			
-			$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data ['invoiceconf'] ['province'] . '</td></tr>';
-		}
-		if ($data ['invoiceconf'] ['country'] != "") {
-			
-			$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data ['invoiceconf'] ['country'] . '</td></tr>';
-		}
-		if ($data ['invoiceconf'] ['zipcode'] != "") {
-			
-			$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data ['invoiceconf'] ['zipcode'] . '</td></tr>';
-		}
+		$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data ['invoiceconf']['address'] . '</td></tr>';
+		$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data ['invoiceconf']['city']. ' - ' .$data ['invoiceconf']['zipcode']. '</td></tr>';
+		$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data ['invoiceconf']['province'] . ', ' .$data ['invoiceconf']['country'].'</td></tr>';
+		$ACCOUNTADD .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $data ['invoiceconf']['invoice_taxes_number'] . '</td></tr>';
 		/**
 		 * ************************* Company Address Code END **************************************************
 		 */
-		
+	
 		/**
 		 * ************************* Customer Address Code START **************************************************
 		 */
 		$ACCOUNTADD_CUSTOMER .= '<table align=right>';
 		$ACCOUNTADD_CUSTOMER .= '<tr>';
 		$ACCOUNTADD_CUSTOMER .= '<td align="right" style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $accountdata ['company_name'] . '</td></tr>';
-		
-		if ($accountdata ['address_1'] != "") {
-			
-			$ACCOUNTADD_CUSTOMER .= '<tr><td align="right" style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $accountdata ['address_1'] . '</td></tr>';
-		}
-		if ($accountdata ['city'] != "") {
-			
-			$ACCOUNTADD_CUSTOMER .= '<tr><td align="right" style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $accountdata ['city'] . '</td></tr>';
-		}
-		if ($accountdata ['province'] != "") {
-			
-			$ACCOUNTADD_CUSTOMER .= '<tr><td align="right" style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $accountdata ['province'] . '</td></tr>';
-		}
-		if ($accountdata ['country'] != "") {
-			
-			$ACCOUNTADD_CUSTOMER .= '<tr><td align="right" style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $accountdata ['country'] . '</td></tr>';
-		}
-		if ($accountdata ['postal_code'] != "") {
-			
-			$ACCOUNTADD_CUSTOMER .= '<tr><td align="right" style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $accountdata ['postal_code'] . '</td></tr>';
-		}
+		$ACCOUNTADD_CUSTOMER .= '<tr><td align="right" style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $accountdata ['address_1'] . '</td></tr>';
+		$ACCOUNTADD_CUSTOMER .= '<tr><td align="right" style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $accountdata ['city'] . ' - ' .$accountdata ['postal_code'].'</td></tr>';
+		$ACCOUNTADD_CUSTOMER .= '<tr><td align="right" style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $accountdata ['province'] . ', ' .$accountdata ['country'].'</td></tr>';
+		$ACCOUNTADD_CUSTOMER .= '<tr><td style="width:100%;font-size: 12px;color:#000;font-family:arial; line-height: 22px;">' . $accountdata ['tax_number'] . '</td></tr>';
 		$ACCOUNTADD_CUSTOMER .= "</table>";
 		/**
 		 * ************************* Customer Address Code END **************************************************
@@ -2207,7 +2171,7 @@ class Invoices extends MX_Controller {
 				"accountid" => $accountid 
 		);
 		$accounttax_query = $this->db_model->getSelectWithOrder ( "*", "taxes_to_accounts", $where, "ASC", "taxes_priority" );
-		if ($accounttax_query->num_rows > 0) {
+		if ($accounttax_query->num_rows () > 0) {
 			$accounttax_query = $accounttax_query->result_array ();
 			foreach ( $accounttax_query as $tax_key => $tax_value ) {
 				$taxes_info = $this->db->get_where ( 'taxes', array (

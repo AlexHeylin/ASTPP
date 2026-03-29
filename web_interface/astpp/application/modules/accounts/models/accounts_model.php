@@ -62,6 +62,28 @@ class Accounts_model extends CI_Model {
 		unset ( $accountinfo ['invoice_config_flag'] );
 		$result = $this->db->insert ( 'accounts', $accountinfo );
 		$last_id = $this->db->insert_id ();
+		/* ASTPP 3.6
+		 * To assign subscription based on tariff plan.
+		 */
+		 $charges_arr = $this->db->get_where('charges',array('pricelist_id'=>$accountinfo['pricelist_id']));
+		 if($charges_arr ->num_rows() > 0){
+			 require_once (APPPATH . 'controllers/ProcessCharges.php');
+			 foreach($charges_arr->result_array() as $key=>$value){
+				 $charge_arr = array (
+						"charge_id" => $value['id'],
+						"accountid" => $last_id ,
+						"assign_date" => gmdate ( "Y-m-d H:i:s" ) 
+				);
+				$this->db->insert ( "charge_to_account", $charge_arr );
+				$accountinfo['id']=$last_id;
+				$Params = array (
+						"ChargeID" => $value['id'],
+						"AccountInfo" => $accountinfo 
+				);
+				$ProcessCharges = new ProcessCharges ();
+				$ProcessCharges->BillAccountCharges ( "ACCOUNTSUBSCRIPTION", $Params );
+			 }
+		 }
 		/**
 		 * ASTPP 3.0
 		 * For Invoice Configuration
@@ -182,7 +204,7 @@ class Accounts_model extends CI_Model {
 				
 				$this->db_model->build_search ( 'reseller_list_search' );
 				$query_pricelist = $this->db_model->getSelect ( "id,reseller_id,balance", "accounts", $where );
-				if ($query_pricelist->num_rows > 0) {
+				if ($query_pricelist->num_rows () > 0) {
 					$description = '';
 					if ($update_array ['balance'] ['operator'] == '2') {
 						$description .= "Reseller update set balance by admin";
@@ -256,7 +278,7 @@ class Accounts_model extends CI_Model {
 			
 			$this->db_model->build_search ( 'customer_list_search' );
 			$query_pricelist = $this->db_model->getSelect ( "id,reseller_id,balance", "accounts", $where );
-			if ($query_pricelist->num_rows > 0) {
+			if ($query_pricelist->num_rows () > 0) {
 				$description = '';
 				if ($update_array ['balance'] ['operator'] == '2') {
 					$description .= "Customer update set balance by admin";
@@ -332,17 +354,17 @@ class Accounts_model extends CI_Model {
 			$opensip_flag = true;
 		}
 		unset ( $add_array ['count'], $add_array ['pin'], $add_array ['account_length'], $add_array ['prefix'], $add_array ['sip_device_flag'], $add_array ['opensips_device_flag'] );
-		if (isset ( $add_array ['is_recording'] ) && $add_array ['is_recording'] != '') {
+		if (isset ( $add_array ['is_recording'] ) && $add_array ['is_recording'] == TRUE) {
 			$is_recording = 1;
 		} else {
 			$is_recording = 0;
 		}
-		if (isset ( $add_array ['allow_ip_management'] ) && $add_array ['allow_ip_management'] != '') {
+		if (isset ( $add_array ['allow_ip_management'] ) && $add_array ['allow_ip_management'] == TRUE) {
 			$allow_ip_management = 1;
 		} else {
 			$allow_ip_management = 0;
 		}
-		if (isset ( $add_array ['local_call'] ) && $add_array ['local_call'] != '') {
+		if (isset ( $add_array ['local_call'] ) && $add_array ['local_call'] == TRUE) {
 			$local_call = 1;
 		} else {
 			$local_call = 0;
@@ -411,7 +433,7 @@ class Accounts_model extends CI_Model {
 						);
 					}
 					$query = $this->db_model->getSelect ( "*", "invoice_conf", $where );
-					if ($query->num_rows > 0) {
+					if ($query->num_rows () > 0) {
 						$invoice_conf = $query->result_array ();
 						$invoice_conf = $invoice_conf [0];
 					} else {
@@ -533,7 +555,7 @@ class Accounts_model extends CI_Model {
 						);
 					}
 					$query = $this->db_model->getSelect ( "*", "invoice_conf", $where );
-					if ($query->num_rows > 0) {
+					if ($query->num_rows () > 0) {
 						$invoice_conf = $query->result_array ();
 						$invoice_conf = $invoice_conf [0];
 					} else {
@@ -584,7 +606,7 @@ class Accounts_model extends CI_Model {
 			// $this->db->insert_batch('accounts', $insert_array);
 			if ($opensip_flag == 1) {
 				$db_config = Common_model::$global_config ['system_config'];
-				$opensipdsn = "mysql://" . $db_config ['opensips_dbuser'] . ":" . $db_config ['opensips_dbpass'] . "@" . $db_config ['opensips_dbhost'] . "/" . $db_config ['opensips_dbname'] . "?char_set=utf8&dbcollat=utf8_general_ci&cache_on=true&cachedir=";
+				$opensipdsn = "mysqli://" . $db_config ['opensips_dbuser'] . ":" . $db_config ['opensips_dbpass'] . "@" . $db_config ['opensips_dbhost'] . "/" . $db_config ['opensips_dbname'] . "?char_set=utf8&dbcollat=utf8_general_ci&cache_on=true&cachedir=";
 				$this->opensips_db = $this->load->database ( $opensipdsn, true );
 				$this->opensips_db->insert_batch ( "subscriber", $opensips_array );
 			}
@@ -757,9 +779,9 @@ class Accounts_model extends CI_Model {
 		}
 		return $query;
 	}
-	function remove_customer($id) {
+	function remove_customer($id,$type) {
 		$this->db->where ( "id", $id );
-		$this->db->where ( "type <>", "-1" );
+		$this->db->where ( "type",$type );
 		$data = array (
 				'deleted' => '1' 
 		);
@@ -793,8 +815,11 @@ class Accounts_model extends CI_Model {
 		return $query;
 	}
 	function get_account_number($accountid) {
+		$accountinfo = $this->session->userdata('accountinfo');
+                $reseller_id = $accountinfo['type'] ==1 || $accountinfo['type'] ==5 ? $accountinfo['id'] : 0 ;
+
 		$query = $this->db_model->getSelect ( "number", "accounts", array (
-				"id" => $accountid 
+				"id" => $accountid,'reseller_id'=>$reseller_id
 		) );
 		if ($query->num_rows () > 0)
 			return $query->row_array ();
@@ -868,6 +893,9 @@ class Accounts_model extends CI_Model {
 			return false;
 	}
 	function get_account_by_number($id) {
+		$accountinfo = $this->session->userdata('accountinfo');
+		$reseller_id = $accountinfo['type'] ==1 || $accountinfo['type'] ==5 ? $accountinfo['id'] : 0 ;
+		$this->db->where('reseller_id',$reseller_id);
 		$this->db->where ( "id", $id );
 		$query = $this->db->get ( "accounts" );
 		

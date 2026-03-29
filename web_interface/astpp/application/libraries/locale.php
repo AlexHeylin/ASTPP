@@ -36,12 +36,13 @@ class Locale {
 		$this->set_lang ();
 	}
 	function set_lang($lang = FALSE) {
-		$current_locale = $this->CI->session->userdata ( 'user_language' );
+		$current_locale = $this->CI->session->userdata ( 'user_language' );		
 		if (empty ( $current_locale )) {
-			$current_locale = 'en_US';
+			//$current_locale = 'en_US';
+			$current_locale = DEFAULT_LANGUAGE;
 		}
 		putenv ( "LANG=$current_locale" );
-		setlocale ( LC_ALL, $current_locale . ".UTF-8" );
+		//setlocale ( LC_ALL, $current_locale . ".UTF-8" );
 		setlocale ( LC_MESSAGES, $current_locale );
 		setlocale ( LC_TIME, $current_locale );
 		setlocale ( LC_CTYPE, $current_locale );

@@ -28,9 +28,11 @@ class User extends MX_Controller {
 		$this->load->helper ( 'form' );
 		$this->load->library ( "astpp/form" );
 		$this->load->library ( "user_form" );
+		$this->load->library ( "astpp/permission" );
 		$this->load->model ( 'Auth_model' );
 		$this->load->model ( 'Astpp_common' );
 		$this->load->model ( 'user_model' );
+		$this->load->library ( 'did_lib' );
 	}
 	function index() {
 		if ($this->session->userdata ( 'user_login' ) == FALSE)
@@ -224,6 +226,7 @@ class User extends MX_Controller {
 		}
 	}
 	function user_did_edit($edit_id = '') {
+		$this->permission->customer_web_record_permission($edit_id,'dids','user/user_didlist/');
 		$data ['page_title'] = gettext ( 'Edit DIDs' );
 		$account_data = $this->session->userdata ( "accountinfo" );
 		$this->db->where ( 'id', $edit_id );
@@ -248,49 +251,16 @@ class User extends MX_Controller {
 			) );
 			$did_arr = ( array ) $did_query->first_row ();
 			if ($action == "add") {
-				if ($did_arr ['accountid'] == 0 && $did_arr ['parent_id'] == $reseller_id) {
-					$setup_cost = $did_arr ['setup'];
-					if ($accountinfo ["reseller_id"] > 0) {
-						$reseller_pricing_res = $this->db_model->getSelect ( "*", "reseller_pricing", array (
-								"note" => $did_arr ['number'],
-								"reseller_id" => $accountinfo ['reseller_id'] 
-						) );
-						$reseller_pricing_arr = ( array ) $reseller_pricing_res->first_row ();
-						$setup_cost = $reseller_pricing_arr ['setup'];
-					}
-					$available_bal = $this->db_model->get_available_bal ( $account_arr );
-					if ($available_bal >= $setup_cost) {
-						$available_bal = $this->db_model->update_balance ( $setup_cost, $accountinfo ["id"], "debit" );
-						$accountinfo = ( array ) $this->db->get_where ( 'accounts', array (
-								"id" => $accountinfo ['id'] 
-						) )->first_row ();
-						$this->common->add_invoice_details ( $accountinfo, "DIDCHRG", $setup_cost, $did_arr ['number'] );
-						require_once (APPPATH . 'controllers/ProcessCharges.php');
-						$ProcessCharges = new ProcessCharges ();
-						$Params = array (
-								"DIDid" => $did_arr ['id'] 
-						);
-						$ProcessCharges->BillAccountCharges ( "DIDs", $Params );
-						
-						$this->db_model->update ( "dids", array (
-								"accountid" => $accountinfo ["id"],
-								"assign_date" => gmdate ( 'Y-m-d H:i:s' ) 
-						), array (
-								"id" => $did_id 
-						) );
-						$this->common->mail_to_users ( 'email_add_did', $account_arr, "", $did_arr ['number'] );
-						$this->session->set_flashdata ( 'astpp_errormsg', 'Did added successfully.' );
-						redirect ( base_url () . "user/user_didlist/" );
-					} else {
-						$this->session->set_flashdata ( 'astpp_notification', 'Insuffiecient fund to purchase this did' );
-						redirect ( base_url () . "user/user_didlist/" );
-					}
-				} else {
-					$this->session->set_flashdata ( 'astpp_notification', 'This DID already purchased by someone.' );
-					redirect ( base_url () . "user/user_didlist/" );
-				}
+				$this->load->library ( 'did_lib' );
+				
+				$did_result = $this->did_lib->did_billing_process($this->session->userdata,$accountinfo ['id'],$did_id);
+				$astpp_flash_message_type = ($did_result[0] == "SUCCESS")?"astpp_errormsg":"astpp_notification";
+				$this->session->set_flashdata ( $astpp_flash_message_type, $did_result[1] );	
+
+				redirect ( base_url () . "user/user_didlist/" );	
 			}
 			if ($action == "edit") {
+				$this->permission->customer_web_record_permission($did_id,'dids','user/user_didlist/');
 				$add_array = $this->input->post ();
 				$data ['form'] = $this->form->build_form ( $this->user_form->build_user_did_form ( $add_array ['free_didlist'] ), $add_array );
 				if ($this->form_validation->run () == FALSE) {
@@ -320,6 +290,7 @@ class User extends MX_Controller {
 				$this->load->view ( 'view_user_did_edit', $data );
 			}
 			if ($action == "delete") {
+				$this->permission->customer_web_record_permission($did_id,'dids','user/user_didlist/');
 				$this->db->update ( "dids", array (
 						"accountid" => 0,
 						"assign_date" => "0000-00-00 00:00:00",
@@ -606,7 +577,7 @@ class User extends MX_Controller {
 				);
 			}
 			$query = $this->db_model->getSelect ( "*", "invoice_conf", $where );
-			if ($query->num_rows > 0) {
+			if ($query->num_rows () > 0) {
 				$invoice_conf = $query->result_array ();
 				$invoice_conf = $invoice_conf [0];
 			} else {
@@ -651,7 +622,7 @@ class User extends MX_Controller {
 	}
 	function user_invoice_date($select, $accountid) {
 		$query = $this->db_model->select ( $select, "invoices", '', "id", "DESC", "1", "0" );
-		if ($query->num_rows > 0) {
+		if ($query->num_rows () > 0) {
 			$invoiceid = $query->result_array ();
 			$invoice_date = $invoiceid [0] [$select];
 			return $invoice_date;
@@ -933,8 +904,15 @@ class User extends MX_Controller {
 			if ($invoice_total_query->num_rows () > 0) {
 				$invoice_total_query = $invoice_total_query->result_array ();
 				$outstanding -= $invoice_total_query [0] ['credit'];
-				$payment_last = ($invoice_total_query [0] ['created_date']) ? date ( "Y-m-d", strtotime ( $invoice_total_query [0] ['created_date'] ) ) : '';
+				$payment_last = ($invoice_total_query [0] ['created_date']) ? date ( "Y-m-d", strtotime ( $invoice_total_query [0] ['created_date'] ) ) : '';				
 			}
+
+			//If that's receipt then forcefully override outstanding amount as user has already paid for the service.
+			if ($value ['type'] == 'R') {
+				$outstanding = '';
+				$payment_last = $invoice_date;
+			}
+
 			$invoice_total_query = $this->db_model->select ( "debit,created_date", "invoice_details", array (
 					"invoiceid" => $value ['id'],
 					"item_type" => "INVPAY" 
@@ -1025,6 +1003,7 @@ class User extends MX_Controller {
 		}
 	}
 	function user_invoice_download($invoiceid) {
+		$this->permission->customer_web_record_permission($invoiceid,'invoices','user/user_invoices_list/');
 		$this->load->module ( 'invoices/invoices' );
 		$this->invoices->invoice_download ( $invoiceid );
 	}
@@ -1377,6 +1356,7 @@ class User extends MX_Controller {
 			}
 		}
 		if ($action == 'delete') {
+			$this->permission->customer_web_record_permission($id,'ip_map','user/user_ipmap/');
 			$this->db->delete ( 'ip_map', array (
 					'id' => $id 
 			) );
@@ -1385,6 +1365,9 @@ class User extends MX_Controller {
 		redirect ( base_url () . "user/user_ipmap/" );
 	}
 	function user_sipdevices() {
+		if(common_model::$global_config['system_config']['opensips']== 0){
+			$this->permission->permission_redirect_url("user/user/");
+		}
 		$data ['page_title'] = gettext ( 'SIP Devices' );
 		$this->session->set_userdata ( 'advance_search', 0 );
 		$data ['grid_fields'] = $this->user_form->build_user_sipdevices ();
@@ -1443,6 +1426,7 @@ class User extends MX_Controller {
 		$this->load->view ( 'view_user_sipdevices_add_edit', $data );
 	}
 	function user_sipdevices_edit($edit_id = '') {
+		$this->permission->customer_web_record_permission($edit_id,'sip_devices','user/user_sipdevices/');
 		$account_data = $this->session->userdata ( "accountinfo" );
 		$data ['page_title'] = gettext ( 'Edit SIP Device' );
 		$where = array (
@@ -1484,6 +1468,7 @@ class User extends MX_Controller {
 		}
 	}
 	function user_sipdevices_delete($id) {
+		$this->permission->customer_web_record_permission($id,'sip_devices','user/user_sipdevices/');
 		$this->db->delete ( 'sip_devices', array (
 				'id' => $id 
 		) );
@@ -1542,6 +1527,7 @@ class User extends MX_Controller {
 			}
 		}
 		if ($action == "delete") {
+			$this->permission->customer_web_record_permission($aniid,'ani_map','user/user_animap_list/');
 			$this->session->set_flashdata ( 'astpp_notification', 'Caller ID removed sucessfully!' );
 			$this->db_model->delete ( "ani_map", array (
 					"id" => $aniid 
@@ -1783,7 +1769,7 @@ class User extends MX_Controller {
 						$where = array("accountid"=> $account['id']);    
 					}
 					$query = $this->db_model->getSelect("*", "invoice_conf", $where);
-					if($query->num_rows >0){
+					if($query->num_rows () > 0){
 						$invoice_conf = $query->result_array();
 						$invoice_conf = $invoice_conf[0];
 					}else{
@@ -1828,7 +1814,7 @@ class User extends MX_Controller {
 							$where = array("accountid"=> $accountinfo['id']);    
 						}
 						$query = $this->db_model->getSelect("*", "invoice_conf", $where);
-						if($query->num_rows >0){
+						if($query->num_rows () > 0){
 							$invoice_conf = $query->result_array();
 							$invoice_conf = $invoice_conf[0];
 						}else{
@@ -1887,6 +1873,9 @@ class User extends MX_Controller {
 		$this->load->view('view_user_fund_transfer', $data);
 	}
 	function user_opensips() {
+		if(common_model::$global_config['system_config']['opensips']== 1){
+			$this->permission->permission_redirect_url("user/user/");
+		}
 		$data ['username'] = $this->session->userdata ( 'user_name' );
 		$data ['page_title'] = gettext ( 'Opensips List' );
 		$data ['search_flag'] = true;
@@ -1935,7 +1924,7 @@ class User extends MX_Controller {
 	function user_opensips_edit($edit_id) {
 		$data ['page_title'] = gettext ( 'Edit Opensips' );
 		$db_config = Common_model::$global_config ['system_config'];
-		$opensipdsn = "mysql://" . $db_config ['opensips_dbuser'] . ":" . $db_config ['opensips_dbpass'] . "@" . $db_config ['opensips_dbhost'] . "/" . $db_config ['opensips_dbname'] . "?char_set=utf8&dbcollat=utf8_general_ci&cache_on=true&cachedir=";
+		$opensipdsn = "mysqli://" . $db_config ['opensips_dbuser'] . ":" . $db_config ['opensips_dbpass'] . "@" . $db_config ['opensips_dbhost'] . "/" . $db_config ['opensips_dbname'] . "?char_set=utf8&dbcollat=utf8_general_ci&cache_on=true&cachedir=";
 		$this->opensips_db = $this->load->database ( $opensipdsn, true );
 		$where = array (
 				'id' => $edit_id 
@@ -1994,7 +1983,7 @@ class User extends MX_Controller {
 	function validate_device_data($data) {
 		if (isset ( $data ["username"] ) && $data ["username"] != "") {
 			$db_config = Common_model::$global_config ['system_config'];
-			$opensipdsn = "mysql://" . $db_config ['opensips_dbuser'] . ":" . $db_config ['opensips_dbpass'] . "@" . $db_config ['opensips_dbhost'] . "/" . $db_config ['opensips_dbname'] . "?char_set=utf8&dbcollat=utf8_general_ci&cache_on=true&cachedir=";
+			$opensipdsn = "mysqli://" . $db_config ['opensips_dbuser'] . ":" . $db_config ['opensips_dbpass'] . "@" . $db_config ['opensips_dbhost'] . "/" . $db_config ['opensips_dbname'] . "?char_set=utf8&dbcollat=utf8_general_ci&cache_on=true&cachedir=";
 			$this->opensips_db = $this->load->database ( $opensipdsn, true );
 			$where = array (
 					"username" => $data ["username"] 
@@ -2026,7 +2015,7 @@ class User extends MX_Controller {
 	}
 	function user_opensips_delete_multiple() {
 		$db_config = Common_model::$global_config ['system_config'];
-		$opensipdsn = "mysql://" . $db_config ['opensips_dbuser'] . ":" . $db_config ['opensips_dbpass'] . "@" . $db_config ['opensips_dbhost'] . "/" . $db_config ['opensips_dbname'] . "?char_set=utf8&dbcollat=utf8_general_ci&cache_on=true&cachedir=";
+		$opensipdsn = "mysqli://" . $db_config ['opensips_dbuser'] . ":" . $db_config ['opensips_dbpass'] . "@" . $db_config ['opensips_dbhost'] . "/" . $db_config ['opensips_dbname'] . "?char_set=utf8&dbcollat=utf8_general_ci&cache_on=true&cachedir=";
 		$this->opensips_db = $this->load->database ( $opensipdsn, true );
 		$ids = $this->input->post ( "selected_ids", true );
 		$where = "id IN ($ids)";

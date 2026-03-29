@@ -31,31 +31,9 @@ class DID_model extends CI_Model {
 		}
 		unset ( $add_array ["action"] );
 		$this->db->insert ( "dids", $add_array );
-		$last_id = $this->db->insert_id ();
+		//$last_id = $this->db->insert_id ();
 		if ($add_array ['accountid'] > 0) {
-			$accountinfo = ( array ) $this->db->get_where ( 'accounts', array (
-					"id" => $add_array ['accountid'] 
-			) )->first_row ();
-			$currency_name = $this->common->get_field_name ( 'currency', "currency", array (
-					'id' => $accountinfo ['currency_id'] 
-			) );
-			$available_bal = $this->db_model->update_balance ( $add_array ["setup"], $add_array ['accountid'], "debit" );
-			$this->common->add_invoice_details ( $accountinfo, "DIDCHRG", $add_array ["setup"], $add_array ['number'] );
-			
-			require_once (APPPATH . 'controllers/ProcessCharges.php');
-			$ProcessCharges = new ProcessCharges ();
-			$Params = array (
-					"DIDid" => $last_id 
-			);
-			$ProcessCharges->BillAccountCharges ( "DIDs", $Params );
-			
-			$accountinfo ['did_number'] = $add_array ['number'];
-			$country_id = $this->common->get_field_name ( 'country', 'countrycode', $add_array ['country_id'] );
-			$accountinfo ['did_country_id'] = $country_id;
-			$accountinfo ['did_setup'] = $this->common_model->calculate_currency ( $add_array ['setup'], '', $currency_name, true, true );
-			$accountinfo ['did_monthlycost'] = $this->common_model->calculate_currency ( $add_array ['monthlycost'], '', $currency_name, true, true );
-			$accountinfo ['did_maxchannels'] = $add_array ['maxchannels'];
-			$this->common->mail_to_users ( 'email_add_did', $accountinfo );
+			$this->did_lib->did_billing_process($this->session->userdata,$add_array ['accountid'],$add_array ['number'],true);
 		}
 		return true;
 	}
@@ -77,10 +55,6 @@ class DID_model extends CI_Model {
 			$data ['accountid'] = $did_result ['accountid'];
 			$data ['parent_id'] = $did_result ['parent_id'];
 		}
-		/**
-		 * ASTPP 3.0
-		 * In did edit last modified date and assign date update
-		 */
 		$data ['last_modified_date'] = gmdate ( "Y-m-d H:i:s" );
 		if ($did_result ['accountid'] == 0 && $data ['accountid'] > 0) {
 			$data ['assign_date'] = gmdate ( "Y-m-d H:i:s" );
@@ -99,28 +73,7 @@ class DID_model extends CI_Model {
 			$this->db->update ( "reseller_pricing", $update_array );
 		}
 		if ($did_result ['accountid'] == 0 && $data ['accountid'] > 0) {
-			$accountinfo = ( array ) $this->db->get_where ( 'accounts', array (
-					"id" => $data ['accountid'] 
-			) )->first_row ();
-			$currency_name = $this->common->get_field_name ( 'currency', "currency", array (
-					'id' => $accountinfo ['currency_id'] 
-			) );
-			$available_bal = $this->db_model->update_balance ( $data ["setup"], $data ['accountid'], "debit" );
-			$this->common->add_invoice_details ( $accountinfo, "DIDCHRG", $data ["setup"], $number );
-			require_once (APPPATH . 'controllers/ProcessCharges.php');
-			$ProcessCharges = new ProcessCharges ();
-			$Params = array (
-					"DIDid" => $id 
-			);
-			$ProcessCharges->BillAccountCharges ( "DIDs", $Params );
-			
-			$accountinfo ['did_number'] = $number;
-			$country_id = $this->common->get_field_name ( 'country', 'countrycode', $data ['country_id'] );
-			$accountinfo ['did_country_id'] = $country_id;
-			$accountinfo ['did_setup'] = $this->common_model->calculate_currency ( $data ['setup'], '', $currency_name, true, true );
-			$accountinfo ['did_monthlycost'] = $this->common_model->calculate_currency ( $data ['monthlycost'], '', $currency_name, true, true );
-			$accountinfo ['did_maxchannels'] = $data ['maxchannels'];
-			$this->common->mail_to_users ( 'email_add_did', $accountinfo );
+			$this->did_lib->did_billing_process($this->session->userdata,$data ['accountid'],$number,true);			
 		}
 	}
 	function getdid_list($flag, $start = 0, $limit = 0) {
@@ -129,9 +82,9 @@ class DID_model extends CI_Model {
 		
 		if ($accountinfo ['type'] == 1) {
 			$where = array (
-					'reseller_id' => $accountinfo ['id'],
-					"parent_id" => $parent_id 
-			);
+					'reseller_pricing.reseller_id' => $accountinfo ['id'],
+					"reseller_pricing.parent_id" => $parent_id 
+				);
 			if ($flag) {
 				if ($accountinfo ['reseller_id'] > 0) {
 					$search_string = $this->db_model->build_search_string ( 'did_list_search' );
@@ -143,11 +96,11 @@ class DID_model extends CI_Model {
 					$query = $this->db->query ( "SELECT a.note AS number,a.*,IF((SELECT COUNT( id ) AS count FROM reseller_pricing AS b WHERE b.parent_id =" . $accountinfo ['id'] . " AND a.note = b.note ) >0,(SELECT reseller_id AS accountid FROM reseller_pricing AS c WHERE c.note = a.note AND c.parent_id =" . $accountinfo ['id'] . "), (SELECT accountid from dids as d where d.parent_id = " . $accountinfo ['id'] . " AND d.number=a.note)) AS accountid FROM reseller_pricing AS a where a.reseller_id=" . $accountinfo ['id'] . " AND a.parent_id =" . $accountinfo ['reseller_id'] . $search_string );
 				} else {
 					$this->db_model->build_search ( 'did_list_search' );
-					$query = $this->db_model->select ( "*,note as number,IF((SELECT COUNT( id ) AS count FROM reseller_pricing AS b WHERE b.parent_id =" . $accountinfo ['id'] . " AND reseller_pricing.note = b.note ) >0,(SELECT reseller_id AS accountid FROM reseller_pricing AS c WHERE c.note = reseller_pricing.note AND c.parent_id =" . $accountinfo ['id'] . "), (SELECT accountid from dids as d where d.parent_id = " . $accountinfo ['id'] . " AND d.number=reseller_pricing.note)) AS accountid", "reseller_pricing", $where, "note", "desc", $limit, $start );
+					$query = $this->db_model->getJionQuery("reseller_pricing", "*,note as number,IF((SELECT COUNT( id ) AS count FROM reseller_pricing AS b WHERE b.parent_id =" . $accountinfo ['id'] . " AND reseller_pricing.note = b.note ) >0,(SELECT reseller_id AS accountid FROM reseller_pricing AS c WHERE c.note = reseller_pricing.note AND c.parent_id =" . $accountinfo ['id'] . "), (SELECT accountid from dids as d where d.parent_id = " . $accountinfo ['id'] . " AND d.number=reseller_pricing.note)) AS accountid", $where, "dids", "reseller_pricing.did_id=dids.id", '',  $limit, $start,"reseller_pricing.id", '', '');
 				}
 			} else {
 				$this->db_model->build_search ( 'did_list_search' );
-				$query = $this->db_model->countQuery ( "*", "reseller_pricing", $where );
+				$query = $this->db_model->getJionQueryCount("reseller_pricing", "*", $where, "dids", "reseller_pricing.did_id=dids.id", '', '', '', '', '', '');
 			}
 		} else {
 			$this->db_model->build_search ( 'did_list_search' );
@@ -207,7 +160,7 @@ class DID_model extends CI_Model {
 		$this->db->where ( "country", ucfirst ( $field_value ) );
 		$query = $this->db->get ( 'countrycode' );
 		$data = $query->result ();
-		if ($query->num_rows > 0)
+		if ($query->num_rows () > 0)
 			return $data [0]->id;
 		else
 			return '';

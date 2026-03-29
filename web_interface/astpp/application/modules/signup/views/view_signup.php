@@ -75,15 +75,11 @@ $('document').ready(function()
 						email: true,
 					},
 					first_name: {
-						required: true,
-						Alphaonly: true 
-					},
-					last_name: {
-						Alphaonly: true,
+						required: true						
 					},
 					telephone_1: {
-                                            phn_number: true,
-                                         },
+                        phn_number: true,
+                     },
                 },
                 messages: {
                     userCaptcha: "<div id= 'capcha_error' style='color: red; margin-right: 113px; margin-top: -8px; text-transform: none;'>Captcha is required</div>",
@@ -116,7 +112,6 @@ ASTPP work best with JavaScript enabled
 
 </head>
 <? extend('master.php') ?>
-<?php error_reporting(E_ERROR); ?>
 <? startblock('extra_head') ?>
 <body style="overflow-x:hidden; background: #343434;">
 
@@ -137,7 +132,7 @@ ASTPP work best with JavaScript enabled
 					<br/>
                     <br/>
                    
-                   <center><h1 style='color:yellow !important;'>Registration/SignUp</h1></center>
+                   
             	<div class="col-md-8 col-md-offset-2">
                     <div class="w-section inverse no-padding margin-t-20">                       
                         <div class="w-box dark sign-in-wr box_shadow">
@@ -267,7 +262,7 @@ ASTPP work best with JavaScript enabled
 				<div class='col-md-9'>
 				<?
 				$js = 'id="country_id"';
-				$country = form_dropdown(array('id'=>'country_id', 'name'=>'country_id'), $this->db_model->build_dropdown("id,country", "countrycode", "", ""), '', 'id="country_id"');
+				$country = form_dropdown(array('id'=>'country_id', 'name'=>'country_id','class'=>'country_id'), $this->db_model->build_dropdown("id,country", "countrycode", "", ""), '', 'id="country_id"');
 				echo $country;
 				?>
 				</div>
@@ -281,7 +276,7 @@ ASTPP work best with JavaScript enabled
 				<label for="Timezone" class="col-md-3 no-padding add_settings" style="text-align: left;">Timezone</label>
 				<div class='col-md-9'>
 				<?
-				$timezone = form_dropdown(array('id'=>'timezone_id', 'name'=>'timezone_id'), $this->db_model->build_dropdown("id,gmtzone", "timezone", "", ""), '', 'id="timezone_id"');
+				$timezone = form_dropdown(array('id'=>'timezone_id', 'name'=>'timezone_id','class'=>'timezone_id'), $this->db_model->build_dropdown("id,gmtzone", "timezone", "", ""), '', 'id="timezone_id"');
 				echo $timezone;
 				?>
 				</div>
@@ -290,7 +285,7 @@ ASTPP work best with JavaScript enabled
 				<label for="Currency" class="col-md-3  no-padding add_settings" style="text-align: left;">Currency</label>
 				<div class='col-md-9'>
 				<?
-				$currency = form_dropdown(array('id'=>'currency_id', 'name'=>'currency_id'), $this->db_model->build_dropdown("id,currencyname", "currency", "", ""), '', 'id="currency_id"');
+				$currency = form_dropdown(array('id'=>'currency_id', 'name'=>'currency_id','class'=>'currency_id'), $this->db_model->build_dropdown("id,currencyname", "currency", "", ""), '', 'id="currency_id"');
 				echo $currency;
 				?>
 				</div>

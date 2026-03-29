@@ -125,7 +125,7 @@ end
 -- Do IP base authentication 
 function ipauthentication(destination_number,from_ip)
 
-    local query = "SELECT "..TBL_IP_MAP..".*, (SELECT number FROM "..TBL_USERS.." where id=accountid AND status=0 AND deleted=0) AS account_code FROM "..TBL_IP_MAP.." WHERE ((INET_ATON(\"" .. from_ip.. "\") & (0xFFFFFFFF & (-1 << 32 - SUBSTRING_INDEX(ip, '/',-1)))) =  ((0xFFFFFFFF & (-1 << 32 - SUBSTRING_INDEX(ip, '/',-1))) & INET_ATON(SUBSTRING_INDEX(ip,'/',1)))) AND (status =0) AND ((SUBSTRING( ip, 1, CHAR_LENGTH( ip ) -3 ) = \"" .. from_ip.. "\" AND prefix IN (NULL,'')) OR (SUBSTRING( ip, 1, CHAR_LENGTH( ip ) -3 ) = \"" .. from_ip.. "\" AND \"" .. destination_number .. "\"  RLIKE prefix)) ORDER BY LENGTH(prefix) DESC LIMIT 1"
+    local query = "SELECT "..TBL_IP_MAP..".*, (SELECT number FROM "..TBL_USERS.." where id=accountid AND status=0 AND deleted=0) AS account_code FROM "..TBL_IP_MAP.." WHERE INET_ATON(\"" .. from_ip.. "\") BETWEEN(INET_ATON(SUBSTRING_INDEX(`ip`, '/', 1)) & 0xffffffff ^((0x1 <<(32 -  SUBSTRING_INDEX(`ip`, '/', -1))) -1 )) AND(INET_ATON(SUBSTRING_INDEX(`ip`, '/', 1)) |((0x100000000 >> SUBSTRING_INDEX(`ip`,'/', -1)) -1))  AND \"" .. destination_number .. "\"  LIKE CONCAT(prefix,'%') ORDER BY LENGTH(prefix) DESC LIMIT 1"
 
     Logger.debug("[IPAUTHENTICATION] Query :" .. query)
     
@@ -265,6 +265,7 @@ function get_call_maxlength(userinfo,destination_number,call_direction,number_lo
 		rates = {}
 		rates['pattern'] = destination_number
 		rates['comment'] = "Local"
+		rates['init_inc'] = 60
 		rates['inc'] = 60
 		rates['cost'] = userinfo['charge_per_min']
 		if (userinfo['charge_per_min'] == "") then
@@ -292,18 +293,10 @@ function get_call_maxlength(userinfo,destination_number,call_direction,number_lo
         if (tonumber(rate_group['markup']) > 0) then
             Logger.info("Markup : "..rate_group['markup'])  
             rates['cost'] = rates['cost'] + ((rate_group['markup']*rates['cost'])/100)
-	end
-        if( rates['cost'] == nil) then
-            rates['cost']=0
-	end
-		Logger.info("=============== Rates Information ===================")
-		Logger.info("ID : "..rates['id'])  
-		Logger.info("Connectcost : "..rates['connectcost'])  
-		Logger.info("Includedseconds : "..rates['includedseconds'])  
-		Logger.info("Cost : "..rates['cost'])
-		Logger.info("comment : "..rates['comment'])
-		Logger.info("Accid : "..userinfo['id'])
-		Logger.info("================================================================")  
+		end
+    	if( rates['cost'] == nil) then
+        	rates['cost']=0
+		end  
 	end
 	    rates['routing_type'] = rate_group['routing_type']		
 		if( call_direction == "inbound" ) then
@@ -313,17 +306,13 @@ function get_call_maxlength(userinfo,destination_number,call_direction,number_lo
 			xml_rates = "ID:"..rates['id'].."|CODE:"..rates['pattern'].."|DESTINATION:"..rates['comment'].."|CONNECTIONCOST:"..rates['connectcost'].."|INCLUDEDSECONDS:"..rates['includedseconds'].."|COST:"..rates['cost'].."|INC:"..rates['inc'].."|INITIALBLOCK:"..rates['init_inc'].."|RATEGROUP:0|MARKUP:"..rate_group['markup'].."|ACCID:"..didinfo['accountid'].."";
 		else
 
-			if( rates['inc']  == 0 or rates['inc'] == "" ) then
+			if(rates['inc'] == nil or rates['inc']  == '0' or rates['inc'] == "" ) then
 				rates['inc'] = rate_group['inc'];
 			end
 
-			if( rates['init_inc']  == 0 or rates['init_inc'] == "" ) then
+			if(rates['init_inc'] == nil or rates['init_inc']  == '0' or rates['init_inc'] == "" ) then
 				rates['init_inc'] = rate_group['initially_increment'];
-			end
-			
-			if( rates['init_inc'] == nil)then
-				rates['init_inc']=0;
-			end
+			end		
 	
 			xml_rates = "ID:"..rates['id'].."|CODE:"..rates['pattern'].."|DESTINATION:"..rates['comment'].."|CONNECTIONCOST:"..rates['connectcost'].."|INCLUDEDSECONDS:"..rates['includedseconds'].."|COST:"..rates['cost'].."|INC:"..rates['inc'].."|INITIALBLOCK:"..rates['init_inc'].."|RATEGROUP:"..rate_group['id'].."|MARKUP:"..rate_group['markup'].."|ACCID:"..userinfo['id'].."";
 
@@ -336,14 +325,28 @@ function get_call_maxlength(userinfo,destination_number,call_direction,number_lo
 		end
 		if (tonumber(rates['cost']) > 0 ) then
 		      maxlength = ( balance -  rates['connectcost'] ) / rates['cost']
-		      if ( config['call_max_length'] and (tonumber(maxlength) > tonumber(config['call_max_length']) / 1000)) then
-				maxlength = config['call_max_length'] / 1000 / 60
+		      		      
+		      if ( config['call_max_length'] and (tonumber(maxlength) > tonumber(config['call_max_length']) / 1000 / 60)) then
+					maxlength = config['call_max_length'] / 1000 / 60
 			      Logger.info("[FIND_MAXLENGTH] LIMITING CALL TO CONFIG MAX LENGTH "..maxlength.."!!!")
 		      end
 		else
 		      Logger.info("[FIND_MAXLENGTH] Call is free - assigning max length!!! :: " .. config['max_free_length'] )
 		      maxlength = config['max_free_length']
 		end      
+
+
+	Logger.info("=============== Rates Information ===================")
+	Logger.info("ID : "..rates['id'])  
+	Logger.info("Code : "..rates['pattern'])  
+	Logger.info("Destination : "..rates['comment'])
+	Logger.info("Connectcost : "..rates['connectcost'])  
+	Logger.info("Includedseconds : "..rates['includedseconds'])  
+	Logger.info("Cost : "..rates['cost'])	
+	Logger.info("Initial Increment : "..rates['init_inc'])
+	Logger.info("Increment : "..rates['inc'])
+	Logger.info("Accid : "..userinfo['id'])
+	Logger.info("================================================================")
 
     tmp[1] = maxlength
     tmp[2] = rates
@@ -381,8 +384,16 @@ function get_pricelists (userinfo,destination_number,number_loop,call_direction)
 	Logger.debug("[GET_PRICELIST_INFO] Query :" .. query)
 	assert (dbh:query(query, function(u)
 		rategroup_info = u
-		end))  
-		
+	end))  
+	
+	if (rategroup_info['initially_increment'] == nil or rategroup_info['initially_increment'] == '0') then
+		rategroup_info['initially_increment'] = 1
+	end
+
+	if (rategroup_info['inc'] == nil or rategroup_info['inc'] == '0') then
+		rategroup_info['inc'] = 1
+	end
+
 	return rategroup_info
 end
 
@@ -448,9 +459,9 @@ function get_carrier_rates(destination_number,number_loop_str,ratecard_id,rate_c
     local carrier_rates = {}
 	local query
 	 if(routing_type == 1) then
-		    query = "SELECT TK.id as trunk_id,TK.codec,GW.name as path,GW.dialplan_variable,TK.provider_id,TK.cid_translation,TR.init_inc,TK.status,TK.dialed_modify,TK.maxchannels,TK.leg_timeout,TR.pattern,TR.id as outbound_route_id,TR.connectcost,TR.comment,TR.includedseconds,TR.cost,TR.inc,TR.prepend,TR.strip,(select name from "..TBL_GATEWAYS.." where status=0 AND id = TK.failover_gateway_id) as path1,(select name from "..TBL_GATEWAYS.." where status=0 AND id = TK.failover_gateway_id1) as path2 FROM (select * from "..TBL_TERMINATION_RATES.." order by LENGTH (pattern) DESC) as TR "..TBL_TRUNKS.." as TK,"..TBL_GATEWAYS.." as GW WHERE GW.status=0 AND GW.id= TK.gateway_id AND TK.status=0 AND TK.id= TR.trunk_id AND "..number_loop_str.." AND TR.status = 0 "
+		    query = "SELECT TK.id as trunk_id,TK.codec,GW.name as path,GW.dialplan_variable,TK.provider_id,TK.cid_translation,TR.init_inc,TK.status,TK.dialed_modify,TK.maxchannels,TK.cps,TK.leg_timeout,TR.pattern,TR.id as outbound_route_id,TR.connectcost,TR.comment,TR.includedseconds,TR.cost,TR.inc,TR.prepend,TR.strip,(select name from "..TBL_GATEWAYS.." where status=0 AND id = TK.failover_gateway_id) as path1,(select name from "..TBL_GATEWAYS.." where status=0 AND id = TK.failover_gateway_id1) as path2 FROM (select * from "..TBL_TERMINATION_RATES.." order by LENGTH (pattern) DESC) as TR "..TBL_TRUNKS.." as TK,"..TBL_GATEWAYS.." as GW WHERE GW.status=0 AND GW.id= TK.gateway_id AND TK.status=0 AND TK.id= TR.trunk_id AND "..number_loop_str.." AND TR.status = 0 "
 	else
-		 query = "SELECT TK.id as trunk_id,TK.codec,GW.name as path,GW.dialplan_variable,TK.provider_id,TK.cid_translation,TR.init_inc,TK.status,TK.dialed_modify,TK.maxchannels,TK.leg_timeout,TR.pattern,TR.id as outbound_route_id,TR.connectcost,TR.comment,TR.includedseconds,TR.cost,TR.inc,TR.prepend,TR.strip,(select name from "..TBL_GATEWAYS.." where status=0 AND id = TK.failover_gateway_id) as path1,(select name from "..TBL_GATEWAYS.." where status=0 AND id = TK.failover_gateway_id1) as path2 FROM "..TBL_TERMINATION_RATES.." as TR,"..TBL_TRUNKS.." as TK,"..TBL_GATEWAYS.." as GW WHERE GW.status=0 AND GW.id= TK.gateway_id AND TK.status=0 AND TK.id= TR.trunk_id AND "..number_loop_str.." AND TR.status = 0 "
+		 query = "SELECT TK.id as trunk_id,TK.codec,GW.name as path,GW.dialplan_variable,TK.provider_id,TK.cid_translation,TR.init_inc,TK.status,TK.dialed_modify,TK.maxchannels,TK.cps,TK.leg_timeout,TR.pattern,TR.id as outbound_route_id,TR.connectcost,TR.comment,TR.includedseconds,TR.cost,TR.inc,TR.prepend,TR.strip,(select name from "..TBL_GATEWAYS.." where status=0 AND id = TK.failover_gateway_id) as path1,(select name from "..TBL_GATEWAYS.." where status=0 AND id = TK.failover_gateway_id1) as path2 FROM "..TBL_TERMINATION_RATES.." as TR,"..TBL_TRUNKS.." as TK,"..TBL_GATEWAYS.." as GW WHERE GW.status=0 AND GW.id= TK.gateway_id AND TK.status=0 AND TK.id= TR.trunk_id AND "..number_loop_str.." AND TR.status = 0 "
 	end
 
     if(tonumber(rate_carrier_id) > 0) then
@@ -529,7 +540,7 @@ end
 
 -- Adding slash \ if number starting with +. 
 function plus_destination_number(destination_number)
-
+    destination_number = destination_number:gsub("%s+", "")
     local dnumber = destination_number
 	local dfirst =  string.match(dnumber, "^(.)")
 	if (dfirst == "+") then

@@ -59,8 +59,19 @@ $logger = new logger ( $lib );
 // set_error_handler('xml_not_found');
 
 // Define file name
-$file = "astpp." . $_REQUEST ['section'] . ".php";
+if (!isset($_REQUEST['section'])) {
+	xml_not_found();
+}
+// Sanitize section to prevent path traversal
+$section = basename($_REQUEST['section']);
+$file = "astpp." . $section . ".php";
+$filepath = "scripts/" . $file;
+
+// Check if file exists before including
+if (!file_exists($filepath)) {
+	xml_not_found();
+}
 
 // Include file
-include_once ("scripts/" . $file);
+include_once ($filepath);
 ?>

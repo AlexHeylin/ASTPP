@@ -23,8 +23,12 @@
 $logger->log ( "*************************** Configuration Starts ********************************" );
 
 $xml = "";
+if (!isset($_REQUEST['key_value'])) {
+	xml_not_found ();
+	exit();
+}
 if ($_REQUEST ['key_value'] == 'sofia.conf') {
-	$xml = load_sofia ( $logger, $db );
+	$xml = load_sofia ( $logger, $db, $config );
 	header ( 'Content-Type: text/xml' );
 	echo $xml;
 } elseif ($_REQUEST ['key_value'] == 'acl.conf') {

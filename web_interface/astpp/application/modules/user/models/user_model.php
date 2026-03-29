@@ -26,7 +26,7 @@ class user_model extends CI_Model {
 		parent::__construct ();
 		if (Common_model::$global_config ['system_config'] ['opensips'] == 0) {
 			$db_config = Common_model::$global_config ['system_config'];
-			$opensipdsn = "mysql://" . $db_config ['opensips_dbuser'] . ":" . $db_config ['opensips_dbpass'] . "@" . $db_config ['opensips_dbhost'] . "/" . $db_config ['opensips_dbname'] . "?char_set=utf8&dbcollat=utf8_general_ci&cache_on=true&cachedir=";
+			$opensipdsn = "mysqli://" . $db_config ['opensips_dbuser'] . ":" . $db_config ['opensips_dbpass'] . "@" . $db_config ['opensips_dbhost'] . "/" . $db_config ['opensips_dbname'] . "?char_set=utf8&dbcollat=utf8_general_ci&cache_on=true&cachedir=";
 			$this->opensips_db = $this->load->database ( $opensipdsn, true );
 		}
 	}
@@ -187,7 +187,7 @@ class user_model extends CI_Model {
 		$query = array ();
 		if ($flag) {
 			$deviceinfo = $this->db_model->select ( "*", "sip_devices", $where, "id", "ASC", $limit, $start );
-			if ($deviceinfo->num_rows > 0) {
+			if ($deviceinfo->num_rows () > 0) {
 				$add_array = $deviceinfo->result_array ();
 				foreach ( $add_array as $key => $value ) {
 					$vars = json_decode ( $value ['dir_vars'] );

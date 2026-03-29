@@ -29,6 +29,7 @@ class Rates extends MX_Controller {
 		$this->load->library ( 'session' );
 		$this->load->library ( 'rates_form' );
 		$this->load->library ( 'astpp/form' );
+		$this->load->library ( 'astpp/permission' );
 		$this->load->model ( 'rates_model' );
 		$this->load->library ( 'csvreader' );
 		ini_set ( "memory_limit", "2048M" );
@@ -230,7 +231,7 @@ class Rates extends MX_Controller {
 		$data ['page_title'] = gettext ( 'Import Origination Rates' );
 		$check_header = $this->input->post ( 'check_header', true );
 		if (empty ( $_FILES ) || ! isset ( $_FILES )) {
-			redirect ( base_url () . "rates/origination_rate_list/" );
+			redirect ( base_url () . "rates/origination_rates_list/" );
 		}
 		$get_extension = strpos ( $_FILES ['origination_rate_import'] ['name'], '.' );
 		$new_final_arr_key = $this->config->item ( 'Origination-rates-field' );
@@ -402,6 +403,7 @@ class Rates extends MX_Controller {
 		$this->load->view ( 'view_origination_rate_add_edit', $data );
 	}
 	function origination_rate_edit($edit_id = '') {
+		$this->permission->check_web_record_permission($edit_id,'routes','rates/origination_rates_list/');
 		$data ['page_title'] = gettext ( 'Edit Origination Rate' );
 		if ($this->session->userdata ( 'logintype' ) == 1 || $this->session->userdata ( 'logintype' ) == 5) {
 			$account_data = $this->session->userdata ( "accountinfo" );
@@ -416,7 +418,7 @@ class Rates extends MX_Controller {
 			);
 		}
 		$account = $this->db_model->getSelect ( "*", "routes", $where );
-		if ($account->num_rows > 0) {
+		if ($account->num_rows () > 0) {
 			foreach ( $account->result_array () as $key => $value ) {
 				$edit_data = $value;
 			}
@@ -427,7 +429,7 @@ class Rates extends MX_Controller {
 			$data ['form'] = $this->form->build_form ( $this->rates_form->get_origination_rate_form_fields (), $edit_data );
 			$this->load->view ( 'view_origination_rate_add_edit', $data );
 		} else {
-			redirect ( base_url () . 'rates/origination_rate_list/' );
+			redirect ( base_url () . 'rates/origination_rates_list/' );
 		}
 	}
 	function origination_rate_save() {
@@ -490,6 +492,7 @@ class Rates extends MX_Controller {
 		redirect ( base_url () . '/rates/termination_rates_list/' );
 	}
 	function origination_rate_delete($id) {
+		$this->permission->check_web_record_permission($id,'routes','rates/origination_rates_list/');
 		$this->rates_model->remove_origination_rate ( $id );
 		$this->session->set_flashdata ( 'astpp_notification', 'Origination rate removed successfully!' );
 		redirect ( base_url () . 'rates/origination_rates_list/' );
@@ -1261,6 +1264,7 @@ class Rates extends MX_Controller {
 	}
 	function termination_rate_rates_mapper_import() {
 		
+		$row_count = 0;
 		// var_dump($this->input->post());
 		$trunkID = $this->input->post ( "trunkid" );
 		$check_header = $this->input->post ( "check_header" );
@@ -1299,12 +1303,15 @@ class Rates extends MX_Controller {
 				$csv_data ['includedseconds'] = ($this->input->post ( "includedseconds-select" )) ? $csv_data [$this->input->post ( "includedseconds-select" )] : "0";
 				$csv_data ['includedseconds'] = ($this->input->post ( "includedseconds-prefix" )) ? $this->input->post ( "includedseconds-prefix" ) . $csv_data ['includedseconds'] : $csv_data ['includedseconds'];
 				$csv_data ['inc'] = ($this->input->post ( "inc-select" )) ? $csv_data [$this->input->post ( "inc-select" )] : "0";
-				$csv_data ['inc'] = ($this->input->post ( "inc-prefix" )) ? $this->input->post ( "inc-prefix" ) . $csv_data ['inc'] : $csv_data ['inc'];
+				$csv_data ['inc'] = ($this->input->post ( "inc-prefix" )) ? $this->input->post ( "inc-prefix" ) . $csv_data ['inc'] : $csv_data ['inc'];				
+				$csv_data ['init_inc'] = ($this->input->post ( "init_inc-select" )) ? $csv_data [$this->input->post ( "init_inc-select" )] : "0";
+				$csv_data ['init_inc'] = ($this->input->post ( "init_inc-prefix" )) ? $this->input->post ( "init_inc-prefix" ) . $csv_data ['init_inc'] : $csv_data ['init_inc'];				
 				$csv_data ['precedence'] = ($this->input->post ( "precedence-select" )) ? $csv_data [$this->input->post ( "precedence-select" )] : "";
 				$csv_data ['precedence'] = ($this->input->post ( "precedence-prefix" )) ? $this->input->post ( "precedence-prefix" ) . $csv_data ['precedence'] : $csv_data ['precedence'];
 				$csv_data ['strip'] = ($this->input->post ( "strip-select" )) ? $csv_data [$this->input->post ( "strip-select" )] : "";
 				$csv_data ['strip'] = ($this->input->post ( "strip-prefix" )) ? $this->input->post ( "strip-prefix" ) . $csv_data ['strip'] : $csv_data ['strip'];
-				$csv_data ['last_modified_date'] = date ( "Y-m-d H:i:s" );
+				$csv_data ['last_modified_date'] = gmdate ( "Y-m-d H:i:s" );
+				$csv_data ['creation_date'] = gmdate ("Y-m-d H:i:s");
 				$str = $this->data_validate ( $csv_data );
 				if ($str != "") {
 					$invalid_array [$i] = $csv_data;
@@ -1321,6 +1328,11 @@ class Rates extends MX_Controller {
 					$new_final_arr [$i] ['inc'] = isset ( $csv_data ['inc'] ) ? $csv_data ['inc'] : 0;
 					$new_final_arr [$i] ['precedence'] = isset ( $csv_data ['precedence'] ) ? $csv_data ['precedence'] : '';
 					$new_final_arr [$i] ['strip'] = isset ( $csv_data ['strip'] ) ? $csv_data ['strip'] : '';
+					$new_final_arr [$i] ['status'] = isset ( $csv_data ['status'] ) ? $csv_data ['status'] : '0';
+					$new_final_arr [$i] ['reseller_id'] = isset ( $csv_data ['reseller_id'] ) ? $csv_data ['reseller_id'] : '0';
+					$new_final_arr [$i] ['creation_date'] = $csv_data ['creation_date'];  
+					$new_final_arr [$i] ['init_inc'] = isset ( $csv_data ['init_inc'] ) ? $csv_data ['init_inc'] : 0; 
+					$row_count ++;
 				}
 			}
 			
@@ -1328,7 +1340,7 @@ class Rates extends MX_Controller {
 		}
 		// print_r($new_final_arr);exit;
 		if (! empty ( $new_final_arr )) {
-			$result = $this->rates_model->bulk_insert_termination_rate ( $new_final_arr );
+			$result = $this->rates_model->bulk_insert_termination_rate ( $new_final_arr, $row_count );
 		} else {
 			
 			$this->session->set_flashdata ( 'astpp_errormsg', 'Error - Nothing selected to import/process!' );

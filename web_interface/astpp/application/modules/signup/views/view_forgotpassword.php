@@ -46,7 +46,6 @@ ASTPP work best with JavaScript enabled
 
 </head>
 <? extend('master.php') ?>
-<?php error_reporting(E_ERROR); ?>
 <? startblock('extra_head') ?>
 <body style="overflow:hidden; background: #343434;">
 
@@ -104,7 +103,7 @@ ASTPP work best with JavaScript enabled
 										<div class="input-group col-md-12 margin-t-15 padding-r-32 padding-l-32">
 												<span class="input-group-addon"><i class="fa fa-envelope"></i></span>
 
-												<input type="text" class="form-control" id="email" name="email" placeholder="User Name OR Email" value = "<?php if (isset($value['email'])) echo  $value['email']; else ''; ?>" style="height:40px;">
+												<input type="text" class="form-control" id="email" name="email" placeholder="Username OR Email" value = "<?php if (isset($value['email'])) echo  $value['email']; else ''; ?>" style="height:40px;">
 										</div> 
 
 												<?php if (isset($error['email'])) echo $error['email']; ?>              
@@ -139,8 +138,7 @@ ASTPP work best with JavaScript enabled
 		{   
 			if((email.value) == "")
 			{
-				document.getElementById("e_name").innerHTML = "The Username or Email field is required! ";
-				document.getElementById("error_mail").innerHTML = "";
+				document.getElementById("e_name").innerHTML = "The Username or Email field is required! ";				
 				return false;   
 			}else{
 				return true;

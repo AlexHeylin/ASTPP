@@ -96,13 +96,13 @@ class User_form {
 						"convert_to_currency" 
 				),
 				array (
-						gettext ( "Refill By" ),
-						"230",
-						"payment_by",
-						"payment_by",
-						"payment_by",
-						"get_refill_by" 
-				),
+                                                gettext ( "Refill By" ),
+                                                "230",
+                                                "payment_by",
+                                                "first_name,last_name,number",
+                                                "accounts",
+                                                "get_refill_by"
+                                ),
 				array (
 						gettext ( "Note" ),
 						"290",
@@ -530,7 +530,19 @@ class User_form {
 						'build_dropdown',
 						'',
 						'' 
-				) 
+				),
+				array (
+						gettext ( 'Tax Number' ),
+						'INPUT',
+						array (
+								'name' => 'tax_number',
+								'size' => '100',
+								'class' => "text field medium" 
+						),
+						'',
+						'tOOL TIP',
+						'' 
+				)
 		);
 		$form ['button_save'] = array (
 				'name' => 'action',

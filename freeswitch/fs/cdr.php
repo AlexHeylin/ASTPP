@@ -20,6 +20,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 // ##############################################################################
+ini_set ( "date.timezone", "UTC" );
 define ( 'ENVIRONMENT', 'production' );
 if (defined ( 'ENVIRONMENT' )) {
 	switch (ENVIRONMENT) {
@@ -42,6 +43,8 @@ include ("lib/astpp.db.php");
 include ("lib/astpp.logger.php");
 include ("lib/astpp.lib.php");
 include ("lib/astpp.constants.php");
+//load custom file.
+include ("lib/astpp.custom.php");
 include ("lib/astpp.cdr.php");
 
 // Define db object
@@ -70,10 +73,10 @@ if (isset ( $_SERVER ["CONTENT_TYPE"] ) && $_SERVER ["CONTENT_TYPE"] == "applica
 	// process_cdr($data,$db,$logger,$decimal_points);
 	if ($data ['variables'] ['calltype'] == "CALLINGCARD") {
 		if (isset ( $data ['variables'] ['originating_leg_uuid'] )) {
-			process_cdr ( $data, $db, $logger, $decimal_points );
+			process_cdr ( $data, $db, $logger, $decimal_points,$config );
 		}
 	} else {
-		process_cdr ( $data, $db, $logger, $decimal_points );
+		process_cdr ( $data, $db, $logger, $decimal_points,$config );
 	}
 }
 

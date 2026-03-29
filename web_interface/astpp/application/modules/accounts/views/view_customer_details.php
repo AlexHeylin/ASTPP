@@ -1,5 +1,4 @@
 <? extend('left_panel_master.php') ?>
-<?php error_reporting(E_ERROR); ?>
 <? startblock('extra_head') ?>
 <script type="text/javascript" language="javascript">
     $(document).ready(function() {
@@ -58,7 +57,7 @@
                     <ul class="breadcrumb">
                     <?php $entity = $entity_name == 'provider' ? 'customer' : $entity_name; ?>
                         <li><a href="<?= base_url()."accounts/".strtolower($entity)."_list/"; ?>"><?= ucfirst($entity_name); ?>s</a></li>
-                        <li class="active"><a href="<?= base_url()."accounts/".strtolower($entity_name)."_edit/".$edit_id."/"; ?>"> <?= ucfirst($accounttype); ?> Profile </a></li>
+                        <li class="active"><a href="<?= base_url()."accounts/".strtolower($entity_name)."_edit/".$edit_id."/"; ?>"> <?= ucfirst(@$accounttype); ?> Profile </a></li>
                     </ul>
                 </div>
                 <div class="pull-right">

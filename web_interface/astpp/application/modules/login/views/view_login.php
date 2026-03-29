@@ -24,7 +24,11 @@
 	?>
 	</title>
     <?php  $user_favicon = $this->session->userdata('user_favicon'); ?>
-    <link rel="icon" href="<? echo base_url(); ?>assets/images/<? echo $user_favicon ?>"/>
+    <?php if($user_favicon) {  ?>
+	<link rel="icon" href="<? echo base_url(); ?>upload/<? echo $user_favicon ?>"/>
+    <?php } else { ?>
+	<link rel="icon" href="<? echo base_url(); ?>assets/images/<? echo $user_favicon ?>"/>
+	<?php } ?>
     <link href="<?= base_url() ?>assets/css/bootstrap.min.css" rel="stylesheet">
     <link href="<?= base_url() ?>assets/fonts/font-awesome-4.5.0/css/font-awesome.css" rel="stylesheet">
     <link href="<?= base_url() ?>assets/css/global-style.css" rel="stylesheet" type="text/css">
@@ -125,12 +129,12 @@
                             <form role="form"  id="login_form" class="form-light" name="login_form"  action="<?php echo base_url(); ?>login/login" method="POST">
                                 <div class="input-group col-md-12 padding-t-10  padding-r-32 padding-l-32">
 				    <span class="input-group-addon login_validate "><i class="fa fa-user"></i></span>
-				    <input type="text" class="form-control error_login" id="username" name="username" placeholder="Username OR Email" value = "" style="height:40px;">
+				    <input type="text" class="form-control error_login" id="username" name="username" placeholder="Username OR Email" value = "" style="height:40px;" autocomplete="off">
                                 </div>
                               
                                 <div class="input-group col-md-12 margin-t-15 padding-r-32 padding-l-32">
 				   <span class="input-group-addon login_validate"><i class="fa fa-lock"></i></span>
-                                   <input type="password" class="form-control error_login" id="password" name="password" placeholder="Password" value = "" style="height:40px;">
+                                   <input type="password" class="form-control error_login" id="password" name="password" placeholder="Password" value = "" style="height:40px;" autocomplete="off">
                                 </div>
                   
                                

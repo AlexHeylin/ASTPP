@@ -28,6 +28,7 @@ class IPMAP extends MX_Controller {
 		$this->load->library ( 'session' );
 		$this->load->library ( "ipmap_form" );
 		$this->load->library ( 'astpp/form' );
+		$this->load->library ( 'astpp/permission');
 		$this->load->model ( 'ipmap_model' );
 		if ($this->session->userdata ( 'user_login' ) == FALSE)
 			redirect ( base_url () . '/astpp/login' );
@@ -40,6 +41,7 @@ class IPMAP extends MX_Controller {
 		$this->load->view ( 'ipmap_add_edit', $data );
 	}
 	function ipmap_edit($edit_id = '') {
+		$this->permission->check_web_record_permission($edit_id,'ip_map','ipmap/ipmap_detail/',false,array('field_name'=>"accountid","parent_table"=>"accounts"));
 		$data ['page_title'] = gettext ( 'Edit IP Map' );
 		$where = array (
 				'id' => $edit_id 
@@ -64,10 +66,12 @@ class IPMAP extends MX_Controller {
 	function ipmap_save() {
 		$add_array = $this->input->post ();
 		$ip = $add_array ['ip'];
-		if (strpos ( $ip, '/' ) !== false) {
-			$add_array ['ip'] = $add_array ['ip'];
-		} else {
-			$add_array ['ip'] = $add_array ['ip'] . '/32';
+		if(!preg_match("/[a-zA-Z\-]/i", $ip)){
+			if (strpos ( $ip, '/' ) !== false) {
+				$add_array ['ip'] = $add_array ['ip'];
+			} else {
+				$add_array ['ip'] = $add_array ['ip'] . '/32';
+			}
 		}
 		$data ['form'] = $this->form->build_form ( $this->ipmap_form->get_ipmap_form_fields (), $add_array );
 		if ($add_array ['id'] != '') {
@@ -143,6 +147,7 @@ class IPMAP extends MX_Controller {
 		}
 	}
 	function ipmap_delete($id) {
+		$this->permission->check_web_record_permission($id,'ip_map','ipmap/ipmap_detail/',false,array('field_name'=>"accountid","parent_table"=>"accounts"));
 		$ip_free = $this->ipmap_model->remove_ipmap ( $id );
 		if ($ip_free) {
 			$this->load->library ( 'freeswitch_lib' );

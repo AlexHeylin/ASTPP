@@ -70,7 +70,9 @@ if(config['opensips'] == '0') then
     else
         callerid_number = ''
     end
-end   	      
+end   	 
+--To override custom callerid
+if custom_callerid then custom_callerid() end     
 Logger.info("[Dialplan] Caller Id name / number  : "..callerid_name.." / "..callerid_number)
 
 --Saving caller id information in array
@@ -93,6 +95,20 @@ local accountname = 'default'
 -- Check call type 
 
 accountcode = params:getHeader("variable_accountcode")
+--To override custom calltype
+if custom_calltype then
+	calltype_custom = custom_calltype() 
+	if(calltype_custom ~= '' and calltype_custom ~= nil) then
+		calltype = calltype_custom 
+	end
+end
+--To override custom accountcode
+if custom_accountcode then
+	accountcode_custom = custom_accountcode()
+	if(accountcode_custom ~= '' and accountcode_custom ~= nil) then
+		accountcode = accountcode_custom 
+	end
+end
 sipcall = params:getHeader("variable_sipcall")
 
 call_direction = define_call_direction(destination_number,accountcode,config)
@@ -184,6 +200,14 @@ end
 
 
 if (userinfo ~= nil) then  
+
+	if (config['realtime_billing'] == "0") then
+		local nibble_id = ""
+		local nibble_rate = ""
+		local nibble_connect_cost = ""
+		local nibble_init_inc = ""
+		local nibble_inc = ""
+	end
     
 	-- print customer information 
 	Logger.info("=============== Account Information ===================")
@@ -225,6 +249,14 @@ if (userinfo ~= nil) then
 	maxlength = origination_array[1]
 	user_rates = origination_array[2]
 	xml_user_rates = origination_array[3] or ""
+	
+	if (config['realtime_billing'] == "0") then		
+		nibble_id = userinfo['id']
+		nibble_rate = user_rates['cost']
+		nibble_connect_cost = user_rates['connectcost']
+	    nibble_init_inc = user_rates['init_inc']
+	    nibble_inc = user_rates['inc']
+	end	
 
 	-- If customer has free seconds then override max length variable with it. 
 	if(package_maxlength ~= "") then	
@@ -235,6 +267,7 @@ if (userinfo ~= nil) then
 	local reseller_ids = {}
 	local i = 1
     local reseller_cc_limit = ""
+    
 	-- Set customer information in new variable
 	customer_userinfo = userinfo
 	rate_carrier_id = user_rates['trunk_id']
@@ -289,6 +322,16 @@ if (userinfo ~= nil) then
 			reseller_maxlength = origination_array_reseller[1];
 			reseller_rates = origination_array_reseller[2];
 			xml_reseller_rates = origination_array_reseller[3];
+			
+			if (config['realtime_billing'] == "0") then
+				-------------NIBBLE BILLING PARAM SET STARTS----------------------------
+				nibble_id = nibble_id..","..reseller_userinfo['id']
+				nibble_rate = nibble_rate..","..reseller_rates['cost']
+				nibble_connect_cost = nibble_connect_cost..","..reseller_rates['connectcost']
+    			nibble_init_inc = nibble_init_inc..","..reseller_rates['init_inc']
+    			nibble_inc = nibble_inc..","..reseller_rates['inc']
+    			-------------NIBBLE BILLING PARAM SET ENDS----------------------------
+			end
 
 			xml_user_rates = xml_user_rates.."||"..xml_reseller_rates
 			Logger.info("Reseller xml_user_rates : "..xml_user_rates)  
@@ -309,7 +352,7 @@ if (userinfo ~= nil) then
 			end
 
             -- ITPL : Added checkout for reseller concurrent calls.    
-            if (tonumber(reseller_userinfo['maxchannels']) > 0) then
+            if (tonumber(reseller_userinfo['maxchannels']) > 0 or tonumber(reseller_userinfo['cps']) > 0) then
                 reseller_cc_limit = set_cc_limit_resellers(reseller_userinfo)
             end
 
@@ -324,6 +367,20 @@ if (userinfo ~= nil) then
 			userinfo = reseller_userinfo
 	end -- End while 
     
+	if (config['realtime_billing'] == "0") then
+    		Logger.info("NIBBLE ID "..nibble_id)
+    		Logger.info("NIBBLE RATE "..nibble_rate)
+    		Logger.info("NIBBLE CONNECT COST "..nibble_connect_cost)
+    		Logger.info("NIBBLE INITIAL INC "..nibble_init_inc)
+    		Logger.info("NIBBLE INC "..nibble_inc)
+	    
+			customer_userinfo["nibble_accounts"] = nibble_id
+	    	customer_userinfo["nibble_rates"] = nibble_rate
+	    	customer_userinfo["nibble_connect_cost"] = nibble_connect_cost
+	    	customer_userinfo["nibble_init_inc"] = nibble_init_inc
+	    	customer_userinfo["nibble_inc"] = nibble_inc
+	end
+	
 	--- Reseller validation ends
 	if ( tonumber(maxlength) <= 0 ) then
 	    error_xml_without_cdr(destination_number,"NO_SUFFICIENT_FUND",calltype,config['playback_audio_notification'],customer_userinfo['id']);
@@ -331,6 +388,7 @@ if (userinfo ~= nil) then
 
 
 	Logger.info("Call Max length duration : "..maxlength.." minutes")
+	--say_timelimit(minutes) 
 	local xml = {}
     
 	
@@ -434,7 +492,7 @@ xml = freeswitch_xml_header(xml,destination_number,accountcode,maxlength,call_di
                 callerid_array['original_cid_name'] = callerid['cid_name']
                 callerid_array['original_cid_number'] = callerid['cid_number']
             end 
-
+			
 			xml = freeswitch_xml_header(xml,destination_number,accountcode,maxlength,call_direction,accountname,xml_user_rates,customer_userinfo,config,nil,reseller_cc_limit,callerid_array)
 
 			-- Added code to override callerid

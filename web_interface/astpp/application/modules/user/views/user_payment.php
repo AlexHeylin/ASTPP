@@ -1,6 +1,4 @@
-
 <? extend('master.php') ?>
-<?php error_reporting(E_ERROR); ?>
 <? startblock('extra_head') ?>
 <style>
 body{
@@ -109,7 +107,7 @@ return false;
 			  <input type="hidden" readonly name="cmd" value="_xclick">
 			  <input type="hidden" readonly  name="business" value="<?=$paypal_email_id?>">
 			  <input type="hidden" readonly name="item_name" value="Billing Store">
-			  <input type="hidden" readonly name="item_number" value="<?=$accountid?>"> 
+			  <input type="hidden" readonly name="item_number" value="<?=$item_number?>"> 
 			  <input type="hidden" readonly name="LC" value="US">
 			  <input type="hidden" readonly name="country" value="USA">
 			  <input type="hidden" readonly name="quantity" value="1"> 

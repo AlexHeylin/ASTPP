@@ -505,10 +505,10 @@ class Accounts_form {
 						'' 
 				),
 				array (
-						gettext ( 'Interval' ),
+						gettext ( 'CPS' ),
 						'INPUT',
 						array (
-								'name' => 'interval',
+								'name' => 'cps',
 								'size' => '20',
 								'class' => "text field medium" 
 						),
@@ -689,6 +689,18 @@ class Accounts_form {
 								"reseller_id" => $loginid 
 						),
 						'multi' 
+				),
+				array (
+						gettext ( 'Tax Number' ),
+						'INPUT',
+						array (
+								'name' => 'tax_number',
+								'size' => '100',
+								'class' => "text field medium" 
+						),
+						'',
+						'tOOL TIP',
+						'' 
 				) 
 		);
 		if ($id == 0) {
@@ -715,7 +727,7 @@ class Accounts_form {
 							'',
 							'',
 							'',
-							'custom_status' 
+							'custom_status_recording' 
 					),
 					array (
 							gettext ( 'Balance Below' ),
@@ -1665,6 +1677,18 @@ class Accounts_form {
 									'reseller_id' => $loginid 
 							),
 							'multi' 
+					),
+					array (
+							gettext ( 'Tax Number' ),
+							'INPUT',
+							array (
+									'name' => 'tax_number',
+									'size' => '100',
+									'class' => "text field medium" 
+							),
+							'',
+							'tOOL TIP',
+							'' 
 					) 
 			);
 		} else {
@@ -1794,6 +1818,18 @@ class Accounts_form {
 									'reseller_id' => $loginid 
 							),
 							'multi' 
+					),
+					array (
+							gettext ( 'Tax Number' ),
+							'INPUT',
+							array (
+									'name' => 'tax_number',
+									'size' => '100',
+									'class' => "text field medium" 
+							),
+							'',
+							'tOOL TIP',
+							'' 
 					),
 					$invoice_config 
 			);
@@ -4114,7 +4150,16 @@ class Accounts_form {
 	function build_grid_buttons_customer() {
 		$logintype = $this->CI->session->userdata ( 'userlevel_logintype' );
 		$provider = null;
-		if ($logintype != 1)
+		$account_import= array();
+		if ($logintype != 1){
+			$account_import = array (
+						gettext ( "Import customers" ),
+						"btn btn-line-warning",
+						"fa fa-upload fa-lg",
+						"button_action",
+						"/account_import/customer_import_mapper/",
+						'single' 
+			);
 			$provider = array (
 					gettext ( "Create Provider" ),
 					"btn btn-line-blue btn",
@@ -4122,6 +4167,7 @@ class Accounts_form {
 					"button_action",
 					"/accounts/provider_add/" 
 			);
+		}	
 			// array(display name, width, db_field_parent_table,feidname, db_field_child_table,function name);
 		$buttons_json = json_encode ( array (
 				array (
@@ -4140,6 +4186,7 @@ class Accounts_form {
 						"popup",
 						"medium" 
 				),
+				$account_import,
 				$provider,
 				array (
 						gettext ( "Export" ),

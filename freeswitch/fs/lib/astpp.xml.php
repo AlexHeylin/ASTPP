@@ -51,45 +51,40 @@ function load_acl($logger, $db, $config) {
 	$logger->log ( $res_acl );
 	
 	foreach ( $res_acl as $res_acl_key => $res_acl_value ) {
+		if(preg_match("/[a-zA-Z\-]/i", $res_acl_value ['ip'])){
+                        $ips = gethostbynamel($res_acl_value ['ip']);
+                        foreach ($ips as $ip => $value){
+                                $res_acl_value ['ip'] = $value . "/32";
+                        }
+                }
 		$xml .= "       <node type=\"allow\" cidr=\"" . $res_acl_value ['ip'] . "\"/>\n";
 	}
 	
-	// For gateways
-	$query = "SELECT * FROM gateways WHERE status=0";
-	$logger->log ( "Sofia Gateway Query : " . $query );
-	$sp_gw = $db->run ( $query );
-	$logger->log ( $sp_gw );
-	
-	foreach ( $sp_gw as $sp_gw_key => $sp_gw_value ) {
-		
-		$sp_gw_settings = json_decode ( $sp_gw_value ['gateway_data'], true );
-		foreach ( $sp_gw_settings as $sp_gw_settings_key => $sp_gw_settings_value ) {
-			if ($sp_gw_settings_value != "" && $sp_gw_settings_key == "proxy") {
-				$tmp_ip_arr = explode ( ":", $sp_gw_settings_value );
-				if (! filter_var ( $tmp_ip_arr [0], FILTER_VALIDATE_IP ) === false) {
-					$xml .= "   <node type=\"allow\" cidr=\"" . $tmp_ip_arr [0] . "/32\"/>\n";
-				}
-			}
-		}
-	}
-	
+
 	// For opensips
 	if ($config ['opensips'] == '0') {
-		$xml .= "<node type=\"allow\" cidr=\"" . $config ['opensips_domain'] . "/32\"/>\n";
+		if(preg_match("/[a-zA-Z\-]/i", $config ['opensips_domain'])){
+                        $ips = gethostbynamel($config ['opensips_domain']);
+                        foreach ($ips as $ip => $value){ 
+                                $config ['opensips_domain'] = $value;
+                        }
+                }
+                $xml .= "<node type=\"allow\" cidr=\"" . $config ['opensips_domain'] . "/32\"/>\n";
+                $xml .= "       </list>\n";
+		// For loopback
+                $xml .= "<list name=\"loopback.auto\" default=\"allow\">\n";
+                $xml .= "<node type=\"allow\" cidr=\"" . $config ['opensips_domain'] . "/32\"/>\n";
+                $xml .= "</list>\n";
+		// For event handing
+                $xml .= "<list name=\"event\" default=\"deny\">\n";
+                $xml .= "<node type=\"allow\" cidr=\"" . $config ['opensips_domain'] . "/32\"/>\n";
 	}
+	else{
+                $xml .= "       </list>\n";
+		// For event handing
+                $xml .= "<list name=\"event\" default=\"deny\">\n";
+        }
 	
-	$xml .= "       </list>\n";
-	
-	// For loopback
-	if ($config ['opensips'] == '0') {
-		$xml .= "<list name=\"loopback.auto\" default=\"allow\">\n";
-		$xml .= "<node type=\"allow\" cidr=\"" . $config ['opensips_domain'] . "/32\"/>\n";
-		$xml .= "</list>\n";
-	}
-	
-	// For event handing
-	$xml .= "<list name=\"event\" default=\"deny\">\n";
-	$xml .= ($config ['opensips'] == "0") ? "<node type=\"allow\" cidr=\"" . $config ['opensips_domain'] . "/32\"/>\n" : "\n";
 	$xml .= "<node type=\"allow\" cidr=\"127.0.0.0/8\"/>\n";
 	$xml .= "</list>\n";
 	$xml .= "           </network-lists>\n";
@@ -101,11 +96,20 @@ function load_acl($logger, $db, $config) {
 }
 
 // Build sofia xml
-function load_sofia($logger, $db) {
+function load_sofia($logger, $db, $config) {
 	$xml = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
 	$xml .= "<document type=\"freeswitch/xml\">\n";
 	$xml .= "   <section name=\"Configuration\" description=\"Configuration\">\n";
 	$xml .= "   <configuration name=\"sofia.conf\" description=\"SIP Profile\">\n";
+	
+	//Added homer integration code
+	if ($config['homer_capture_server'] != "") {
+		$xml .= " <global_settings>\n";
+		$xml .= " <param name=\"sip-capture\" value=\"yes\"/>\n";
+		$xml .= " <param name=\"capture-server\" value=\"".$config['homer_capture_server']."\"/>\n";
+		$xml .= " </global_settings>\n";
+	}
+
 	$xml .= "   <profiles>\n";
 	
 	$query = "SELECT * FROM sip_profiles WHERE status=0";
@@ -166,9 +170,15 @@ function load_sofia($logger, $db) {
 	return $xml;
 }
 function update_vm_data($logger, $db, $password, $user) {
+	if (!isset($_REQUEST['user'])) {
+		return;
+	}
 	$query = "SELECT * FROM sip_devices where username='" . $_REQUEST ['user'] . "' limit 1";
 	$logger->log ( "Directory Query : " . $query );
 	$res_dir = $db->run ( $query );
+	if (empty($res_dir) || !isset($res_dir[0])) {
+		return;
+	}
 	$params = json_decode ( $res_dir [0] ['dir_params'], true );
 	$params ['vm-password'] = $password;
 	
@@ -179,6 +189,10 @@ function update_vm_data($logger, $db, $password, $user) {
 // Build directory xml
 function load_directory($logger, $db) {
 	$xml = "";
+	
+	if (!isset($_REQUEST['user']) || !isset($_REQUEST['domain'])) {
+		return $xml;
+	}
 	
 	$query = "SELECT username,dir_params,dir_vars,number as accountcode,accountid FROM sip_devices,accounts WHERE sip_devices.status=0 AND accounts.status=0 AND accounts.deleted=0 AND accounts.id=sip_devices.accountid AND username='" . $_REQUEST ['user'] . "' limit 1";
 	

@@ -116,7 +116,7 @@ class Freeswitch_form {
 						'where_arr',
 						array (
 								"reseller_id" => "0",
-								"type" => "0",
+								"type" => "0,3",
 								"deleted" => "0" 
 						) 
 				),
@@ -1147,7 +1147,7 @@ class Freeswitch_form {
 						gettext ( 'From- Domain' ),
 						'INPUT',
 						array (
-								'name' => 'from_domain',
+								'name' => 'from-domain',
 								'size' => '20',
 								'class' => "text field medium" 
 						),
@@ -1159,7 +1159,7 @@ class Freeswitch_form {
 						gettext ( 'From User' ),
 						'INPUT',
 						array (
-								'name' => 'from_user',
+								'name' => 'from-user',
 								'size' => '20',
 								'class' => "text field medium" 
 						),
@@ -1179,6 +1179,22 @@ class Freeswitch_form {
 						'tOOL TIP',
 						'' 
 				),
+				array (
+                                                gettext ( 'Extension-In-Contact' ),
+                                                array (
+                                                        'name' => 'extension-in-contact',
+                                                        'class' => 'add_settings'
+                                                ),
+                                                'SELECT',
+                                                '',
+                                                '',
+                                                'tOOL TIP',
+                                                '',
+                                                '',
+                                                '',
+                                                '',
+                                                'set_option_default_false'
+                                ),
 				array (
 						gettext ( 'Extension' ),
 						'INPUT',

@@ -30,6 +30,7 @@ class Freeswitch extends MX_Controller {
 		$this->load->library ( 'session' );
 		$this->load->library ( "freeswitch_form" );
 		$this->load->library ( 'astpp/form' );
+		$this->load->library ( 'astpp/permission');
 		$this->load->library ( 'freeswitch_lib' );
 		$this->load->model ( 'freeswitch_model' );
 		
@@ -61,6 +62,7 @@ class Freeswitch extends MX_Controller {
 		}
 	}
 	function fssipdevices_edit($edit_id = '') {
+		$this->permission->check_web_record_permission($edit_id,'sip_devices','freeswitch/fssipdevices/');
 		$data ['page_title'] = gettext ( 'Edit SIP Device' );
 		$account_data = $this->session->userdata ( "accountinfo" );
 		$where = array (
@@ -76,6 +78,7 @@ class Freeswitch extends MX_Controller {
 		}
 	}
 	function customer_fssipdevices_edit($edit_id, $accountid) {
+		$this->permission->check_web_record_permission($edit_id,'sip_devices','freeswitch/fssipdevices/');
 		$data ['username'] = $this->session->userdata ( 'user_name' );
 		$account_data = $this->session->userdata ( "accountinfo" );
 		$data ['page_title'] = gettext ( 'Edit SIP device' );
@@ -394,6 +397,18 @@ class Freeswitch extends MX_Controller {
 		$data ['page_title'] = gettext ( 'Live Call Report' );
 		$this->load->view ( 'view_fs_livecall_report', $data );
 	}
+		
+	#To remove leg wise dialstring parameters from live call report
+	function livecall_delete_all_between($beginning, $end, $string) {
+  		$beginningPos = strpos($string, $beginning);
+  		$endPos = strpos($string, $end);
+  		if ($beginningPos === false || $endPos === false) {
+    			return $string;
+  		}
+  		$textToDelete = substr($string, $beginningPos, ($endPos + strlen($end)) - $beginningPos);
+  		return str_replace($textToDelete, '', $string);
+	}
+	
 	function livecall_report_json() {
 		$command = "api show channels";
 		$response = $this->freeswitch_model->reload_live_freeswitch ( $command );
@@ -404,6 +419,8 @@ class Freeswitch extends MX_Controller {
 		$data = explode ( "\n", $response );
 		for($i = 0; $i < count ( $data ) - 2; $i ++) {
 			if (trim ( $data [$i] ) != '') {
+				#Calling the function feeding the altered bridge string to same variable
+				$data [$i] = $this->livecall_delete_all_between('[', ']', $data [$i]);
 				if (count ( $data_header ) == 0 || substr ( $data [$i], 0, 4 ) == "uuid") {
 					$data_header = explode ( ",", $data [$i] );
 				} else {
@@ -433,6 +450,12 @@ class Freeswitch extends MX_Controller {
 						if (trim ( $sub_fs_array [0] ) == 'Caller-Channel-Answered-Time') {
 							$answer_min = $sub_fs_array [1];
 							$diff_value = substr ( $answer_min, 0, 11 ) - $value ['created_epoch'];
+						}
+						#modifying bridge string for active call stat when recording is enabled
+						if (trim ( $sub_fs_array [0] ) == 'variable_sip_req_uri' && $calls [$i] ['application'] == "record_session"){
+							$before = ["%40","%3A"];
+    							$after = ["@",":"];
+    							$calls [$i] ['application_data'] = str_replace($before, $after, $sub_fs_array [1]);
 						}
 					}
 				}
@@ -480,7 +503,7 @@ class Freeswitch extends MX_Controller {
 		$gateway_data = array ();
 		$query = $this->freeswitch_model->get_gateway_list ( true, $paging_data ["paging"] ["start"], $paging_data ["paging"] ["page_no"] );
 		$gateway_result = array ();
-		if ($query->num_rows > 0) {
+		if ($query->num_rows () > 0) {
 			$query = $query->result_array ();
 			foreach ( $query as $key => $query_value ) {
 				$gateway_data = array ();
@@ -579,7 +602,7 @@ class Freeswitch extends MX_Controller {
 					$insert_arr [$key] = $gateway_data ["status"];
 				} else {
 					if ($key != "id") {
-						$gateway_arr [$key] = $gateway_value;
+						$gateway_arr [$key] = trim($gateway_value);
 					}
 				}
 			}
@@ -788,9 +811,9 @@ class Freeswitch extends MX_Controller {
 		if ($button_name == "start") {
 			$cmd = "api sofia profile " . trim ( $query [0] ['name'] ) . " start";
 		} elseif ($button_name == "stop") {
-			$cmd = "api sofia profile stop";
+			$cmd = "api sofia profile " . trim ( $query [0] ['name'] ) . " stop";
 		} elseif ($button_name == "reload") {
-			$cmd = "api reloadxml";
+			$cmd = "api reload mod_sofia";
 		} elseif ($button_name == "rescan") {
 			$cmd = "api sofia profile " . trim ( $query [0] ['name'] ) . " rescan";
 		}
@@ -821,14 +844,14 @@ class Freeswitch extends MX_Controller {
 				redirect ( base_url () . 'freeswitch/fssipprofile_add/' );
 				exit ();
 			}
-			if (! preg_match ( '/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\z/', $sipprofile_data ['sip_ip'] )) {
+			/*if (! preg_match ( '/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\z/', $sipprofile_data ['sip_ip'] )) {
 				$this->session->set_flashdata ( 'astpp_notification', 'SIP IP must be proper!' );
 				redirect ( base_url () . 'freeswitch/fssipprofile_add/' );
 				exit ();
-			}
+			}*/
 			$sipprofile_data ['id'] = '';
 			$check_authentication = $this->freeswitch_model->profile_authentication ( $sipprofile_data );
-			if ($check_authentication->num_rows == 0) {
+			if ($check_authentication->num_rows () == 0) {
 				
 				$sipprofile_data ['created_date'] = gmdate ( 'Y-m-d H:i:s' );
 				/**
@@ -845,6 +868,8 @@ class Freeswitch extends MX_Controller {
 				redirect ( base_url () . 'freeswitch/fssipprofile_add/' );
 			}
 			$this->session->set_flashdata ( 'astpp_errormsg', 'SIP Profile Added Successfully!' );
+                        $cmd = "api reload mod_sofia";
+                        $this->freeswitch_model->reload_freeswitch ( $cmd );
 			redirect ( base_url () . 'freeswitch/fssipprofile/' );
 		}
 		
@@ -853,7 +878,7 @@ class Freeswitch extends MX_Controller {
 			unset ( $sipprofile_data ['action'] );
 			unset ( $sipprofile_data ['sipstatus'] );
 			$insert_arr = $sipprofile_data;
-			if ($check_authentication->num_rows == 0) {
+			if ($check_authentication->num_rows () == 0) {
 				$insert_arr ['last_modified_date'] = gmdate ( "Y-m-d H:i:s" );
 				$update = $this->db->update ( "sip_profiles", $insert_arr, array (
 						'id' => $sipprofile_data ['id'] 
@@ -990,6 +1015,8 @@ class Freeswitch extends MX_Controller {
 				"id" => $profile_id 
 		) );
 		$this->session->set_flashdata ( 'astpp_notification', 'SIP Profile Removed Successfully!' );
+		$cmd = "api reload mod_sofia";
+		$this->freeswitch_model->reload_freeswitch ( $cmd );
 		redirect ( base_url () . 'freeswitch/fssipprofile/' );
 	}
 	function fsserver_list() {
